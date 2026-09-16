@@ -1,0 +1,6 @@
+Master List:
+Determine Operator based on the Acquirer and Operator ID
+1. Chennai Metro: Acquirer ID - 0x0B, Operator ID - 0x177D
+2. Hyderabad Metro: Acquirer ID - 0x04, Operator ID - 0x3630
+3. Bengaluru Metro: Acquirer ID - 0x02, Operator ID - 0x0001
+4. MTC Chennai: Acquirer ID - 0x01, Operator ID - 0x0001

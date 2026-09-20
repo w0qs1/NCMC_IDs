@@ -1,11 +1,18 @@
+<<<<<<< HEAD
+=======
+
+>>>>>>> ee183fa (Modified to proper csv format with scripts to auto-extract operator and station info)
 # NCMC Operator and Station ID Database
 
 A community-maintained repository containing decoded operator IDs and station IDs for NCMC (National Common Mobility Card) transit networks.
 
 The database is built by reading identifiers from NCMC cards and manually mapping them to transit operators, stations, and terminal locations.
 
+<<<<<<< HEAD
 The source of truth is a SQLite database (`data/ncmc.db`). The CSV files that Metrodroid consumes are **generated** from it.
 
+=======
+>>>>>>> ee183fa (Modified to proper csv format with scripts to auto-extract operator and station info)
 ## Disclaimer
 
 ### Data Accuracy
@@ -31,11 +38,15 @@ All trademarks, brand names, and organization names belong to their respective o
 
 This repository is an independent, community-driven effort and does not represent any official database, specification, or internal system of the organizations mentioned above.
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> ee183fa (Modified to proper csv format with scripts to auto-extract operator and station info)
 ## Repository Structure
 
 ```text
 .
+<<<<<<< HEAD
 ├── data/
 │   ├── ncmc.db              # SQLite database: the source of truth
 │   └── schema.sql           # table definitions (documented)
@@ -140,6 +151,29 @@ Use `ncmc_lookup.py` (it asks for the name), or `ncmc_db.py add-operator`, with:
 The combination of `acquirer_id` and `operator_id` is unique to each operator, and the database will refuse duplicates.
 
 ### Operator Naming Conventions
+=======
+├── operators.csv
+├── cmrl.csv
+├── bmrcl.csv
+└── ...
+```
+
+- `operators.csv` — Operator mappings using Acquirer ID and Operator ID.
+- Operator-specific `.csv` files — Station and terminal ID mappings.
+
+## Contribution Guidelines
+
+### 1. Add a New Operator
+
+Add a new entry to `operators.csv` using the following identifiers:
+
+- `acquirer_id`
+- `operator_id`
+
+The combination of `acquirer_id` and `operator_id` is unique to each operator.
+
+#### Operator Naming Conventions
+>>>>>>> ee183fa (Modified to proper csv format with scripts to auto-extract operator and station info)
 
 Use short, recognizable operator names instead of complete legal entity names.
 
@@ -155,6 +189,7 @@ Use short, recognizable operator names instead of complete legal entity names.
 - Maintain consistent naming across the repository.
 - Do not create duplicate entries for an existing operator.
 
+<<<<<<< HEAD
 
 ### Operator Station Files
 
@@ -175,6 +210,71 @@ terminal_id,station_name,comments
 | `comments`     | Additional information, including uncertainties, shortened names, or estimated IDs. |
 
 ### Station Naming Conventions
+=======
+### 2. Create an Operator-Specific Station File
+
+Create a separate `.csv` file to store station information for each operator.
+
+The filename should be short and representative of the operator.
+
+#### Examples
+
+| Filename | Operator |
+|---|---|
+| `cmrl.csv` | Chennai Metro |
+| `bmrcl.csv` | Bengaluru Metro |
+
+Use lowercase filenames where possible.
+
+The database updater may also generate a filename based on the operator's Acquirer ID and Operator ID when no station file is configured. For example:
+
+```text
+0B177D.csv
+```
+
+Existing configured filenames should be preserved whenever possible.
+
+### 3. Station CSV Format
+
+Each operator-specific CSV file must contain the following columns:
+
+```csv
+terminal_id,station_name,comments
+```
+
+| Column | Description |
+|---|---|
+| `terminal_id` | 3-byte (6-hex-character) operator-specific terminal ID, formatted as `0xXXXXXX`. |
+| `station_name` | Station name using Title Case Capitalization. |
+| `comments` | Additional information, including uncertainties, shortened names, or estimated IDs. |
+
+#### Example
+
+```csv
+terminal_id,station_name,comments
+0x001140,Airport,
+0x002140,Meenambakkam Metro,
+0x003140,OTA - Nanganallur Road,
+0x004140,Alandur,? Name shortened
+0x005140,Guindy,
+0x006140,Little Mount,
+0x007140,Saidapet,
+0x008140,Nandanam,
+0x009140,Teynampet,
+0x00A140,AG-DMS,
+0x00B140,Thousand Lights,
+0x00C140,LIC,
+0x00D140,Government Estate,
+0x00E140,Central,? Name shortened
+0x00F140,High Court,?
+,Mannadi,?
+,Washermanpet,?
+```
+
+**Note:** The example above illustrates the intended format. Ensure that new entries use valid CSV formatting, with consistent field separation and appropriate quoting when required.
+
+### 4. Station Naming Conventions
+>>>>>>> ee183fa (Modified to proper csv format with scripts to auto-extract operator and station info)
 
 Station names must follow the guidelines below.
 
@@ -217,8 +317,12 @@ terminal_id,station_name,comments
 
 Avoid unnecessary abbreviations that make the station difficult to identify.
 
+<<<<<<< HEAD
 
 ### Terminal ID Structure
+=======
+## 5. Terminal ID Structure
+>>>>>>> ee183fa (Modified to proper csv format with scripts to auto-extract operator and station info)
 
 Each station entry uses a **3-byte (24-bit) operator-specific terminal ID**, represented by six hexadecimal characters.
 
@@ -238,7 +342,11 @@ For example, the following terminal ID patterns are associated with Hyderabad Me
 
 These mappings are illustrative and should be independently verified before being treated as authoritative. They may help investigate possible operator-specific numbering patterns, but they do not by themselves prove how the 24-bit ID is encoded.
 
+<<<<<<< HEAD
 #### Observed ID Patterns
+=======
+### Observed ID Patterns
+>>>>>>> ee183fa (Modified to proper csv format with scripts to auto-extract operator and station info)
 
 Some operators may use a structure where:
 
@@ -250,7 +358,11 @@ These patterns are operator-specific and must be verified using multiple directl
 
 Do not assume that the same decoding scheme applies to every transit operator.
 
+<<<<<<< HEAD
 #### AFC Gate Information
+=======
+### AFC Gate Information
+>>>>>>> ee183fa (Modified to proper csv format with scripts to auto-extract operator and station info)
 
 AFC gate information may be masked using `XXX` characters when the exact gate identifier is unnecessary or unknown.
 
@@ -264,7 +376,11 @@ A masked ID represents a pattern, not necessarily a directly observed complete t
 
 Masking should be used only when the known portion of the identifier is supported by available evidence.
 
+<<<<<<< HEAD
 #### Wildcard Matching
+=======
+### Wildcard Matching
+>>>>>>> ee183fa (Modified to proper csv format with scripts to auto-extract operator and station info)
 
 The character `X` is treated as a wildcard when matching existing station IDs.
 
@@ -293,6 +409,7 @@ It does not match:
 
 Wildcard matching is used to avoid adding individual terminal entries when an existing station mapping already covers the terminal ID.
 
+<<<<<<< HEAD
 If several patterns of the same operator match one terminal ID, the **most specific** one (fewest `X` characters) wins, so an exact ID can override a broader mask. `python scripts/ncmc_db.py check` reports patterns that overlap with equal specificity, because those are ambiguous.
 
 #### How the tools suggest masks
@@ -303,6 +420,11 @@ The use of a wildcard must be documented when the exact terminal or AFC gate ide
 
 
 ### Extending Station Mappings
+=======
+The use of a wildcard must be documented when the exact terminal or AFC gate identifier is unknown.
+
+## 6. Extending Station Mappings
+>>>>>>> ee183fa (Modified to proper csv format with scripts to auto-extract operator and station info)
 
 The repository may contain station IDs that have not been directly observed on an NCMC card.
 
@@ -314,7 +436,11 @@ These IDs may be estimated using:
 - Station sequences and neighboring station information.
 - Previously decoded terminal IDs.
 
+<<<<<<< HEAD
 #### Estimated IDs
+=======
+### Estimated IDs
+>>>>>>> ee183fa (Modified to proper csv format with scripts to auto-extract operator and station info)
 
 Estimated terminal IDs must be clearly distinguished from IDs verified through card data.
 
@@ -331,7 +457,11 @@ terminal_id,station_name,comments
 
 Estimates should be updated or corrected when new card data becomes available.
 
+<<<<<<< HEAD
 #### Station Sequence and Pattern-Based Estimates
+=======
+### Station Sequence and Pattern-Based Estimates
+>>>>>>> ee183fa (Modified to proper csv format with scripts to auto-extract operator and station info)
 
 Station order, line maps, and neighboring terminal IDs may provide clues about an operator's numbering scheme.
 
@@ -341,8 +471,12 @@ For example, knowing that a station is the 13th station from one terminus does n
 
 Pattern-based estimates must be marked as uncertain until supported by directly observed card data or another reliable source.
 
+<<<<<<< HEAD
 
 ### Uncertain or Incomplete Mappings
+=======
+## 7. Uncertain or Incomplete Mappings
+>>>>>>> ee183fa (Modified to proper csv format with scripts to auto-extract operator and station info)
 
 Use `?` in the `comments` column when any part of a mapping is uncertain.
 
@@ -355,7 +489,11 @@ This may include:
 - Unknown AFC gate identifiers.
 - Wildcard or partially masked identifiers.
 
+<<<<<<< HEAD
 #### Examples
+=======
+### Examples
+>>>>>>> ee183fa (Modified to proper csv format with scripts to auto-extract operator and station info)
 
 ```csv
 terminal_id,station_name,comments
@@ -365,7 +503,11 @@ terminal_id,station_name,comments
 0x123XXX,Example Station,? AFC gate identifier masked
 ```
 
+<<<<<<< HEAD
 If the station is known but its terminal ID has not been decoded, leave the `terminal_id` field blank in the exported CSV (in the database the pattern is NULL; use `-` with `ncmc_db.py add-station`).
+=======
+If the station is known but its terminal ID has not been decoded, leave the `terminal_id` field blank.
+>>>>>>> ee183fa (Modified to proper csv format with scripts to auto-extract operator and station info)
 
 Example:
 
@@ -377,12 +519,20 @@ terminal_id,station_name,comments
 
 Do not invent terminal IDs to fill missing values.
 
+<<<<<<< HEAD
 
 ### Data Verification
 
 Contributors are encouraged to verify mappings using actual card data whenever possible.
 
 #### Recommended Verification Process
+=======
+## 8. Data Verification
+
+Contributors are encouraged to verify mappings using actual card data whenever possible.
+
+### Recommended Verification Process
+>>>>>>> ee183fa (Modified to proper csv format with scripts to auto-extract operator and station info)
 
 1. Read the terminal ID from an NCMC card.
 2. Identify the associated transit operator.
@@ -394,7 +544,11 @@ Contributors are encouraged to verify mappings using actual card data whenever p
 
 Directly observed mappings should be treated separately from estimated mappings.
 
+<<<<<<< HEAD
 #### Exact and Masked IDs
+=======
+### Exact and Masked IDs
+>>>>>>> ee183fa (Modified to proper csv format with scripts to auto-extract operator and station info)
 
 Before adding a new station entry:
 
@@ -412,6 +566,7 @@ terminal_id,station_name,comments
 
 a newly observed terminal ID of `0x123456` should not automatically create another entry for the same station.
 
+<<<<<<< HEAD
 
 ### Duplicate Prevention and Updates
 
@@ -425,6 +580,53 @@ The database enforces most of the old CSV rules itself:
 - Rows keep their insertion order, so regenerated CSVs produce small, reviewable diffs.
 
 ### Corrections and Updates
+=======
+## 9. CSV Update and Duplicate Prevention
+
+Database update tools should preserve existing information.
+
+### Append-Only Updates
+
+When adding a new operator or station:
+
+- Existing rows must not be deleted.
+- Existing station IDs must not be overwritten.
+- New entries should be appended only after duplicate checks.
+- Existing station files should not be rewritten unnecessarily.
+- A missing final newline must be handled before appending a new CSV row.
+
+### Operator Duplicates
+
+The combination of Acquirer ID and Operator ID uniquely identifies an operator.
+
+Before adding an operator, check whether the same combination already exists in `operators.csv`.
+
+Do not create duplicate operator entries.
+
+### Station Duplicates
+
+Before adding a terminal ID, check:
+
+1. Exact terminal ID matches.
+2. Wildcard matches using existing `X` masks.
+3. Complete CSV row matches, where applicable.
+
+Only append the row if it is genuinely new.
+
+### Missing Station File References
+
+If an existing operator has an empty `terminal_info` field:
+
+1. Generate the operator-specific station filename.
+2. Assign the generated filename to `terminal_info`.
+3. Persist the updated value in `operators.csv`.
+4. Create the station file if it does not exist.
+5. Add the new terminal entry after performing duplicate checks.
+
+Existing operator rows must be preserved when updating the file.
+
+## 10. Corrections and Updates
+>>>>>>> ee183fa (Modified to proper csv format with scripts to auto-extract operator and station info)
 
 If new evidence contradicts an existing mapping:
 
@@ -436,11 +638,18 @@ If new evidence contradicts an existing mapping:
 
 When correcting a wildcard mapping, explain why the previous pattern was incorrect or incomplete whenever possible.
 
+<<<<<<< HEAD
 
 ## Contribution Principles
 
 - Use consistent operator and station names.
 - Follow the prescribed data structure and export format.
+=======
+## Contribution Principles
+
+- Use consistent operator and station names.
+- Follow the prescribed CSV structure.
+>>>>>>> ee183fa (Modified to proper csv format with scripts to auto-extract operator and station info)
 - Do not duplicate existing operators or stations.
 - Treat each terminal ID as a complete 24-bit operator-specific identifier.
 - Distinguish confirmed data from estimates.
@@ -449,7 +658,12 @@ When correcting a wildcard mapping, explain why the previous pattern was incorre
 - Avoid inventing terminal IDs.
 - Use official station names where possible.
 - Keep filenames short and recognizable.
+<<<<<<< HEAD
 - Preserve existing data during updates.
 - Edit the database, never the generated CSVs.
 - Never commit Metrodroid JSON dumps: they contain personal data (`*.json` is git-ignored).
 - Submit corrections when new card data disproves an existing mapping.
+=======
+- Preserve existing CSV data during updates.
+- Submit corrections when new card data disproves an existing mapping.
+>>>>>>> ee183fa (Modified to proper csv format with scripts to auto-extract operator and station info)

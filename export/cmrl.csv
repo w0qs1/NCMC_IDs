@@ -1,6 +1,6 @@
 terminal_id,station_name,comments
 0x001140,Airport,
-0x002140,Meenambakkam Metro,
+0x002140,Meenambakkam,
 0x003140,OTA - Nanganallur Road,
 0x004140,Alandur,? Name shortened
 0x005140,Guindy,
@@ -16,14 +16,14 @@ terminal_id,station_name,comments
 0x00F140,High Court,?
 ,Mannadi,?
 ,Washermanpet,?
-,Thyagaraya College Metro,?
+,Thyagaraya College,?
 ,Tondiarpet,?
-,New Washermanpet Metro,?
+,New Washermanpet,?
 ,Tollgate,?
 ,Kaladipet,?
-,Thiruvotriyur Theredi Metro,?
+,Thiruvotriyur Theredi,?
 ,Thiruvotriyur,?
-,Wimco Nagar Metro,?
+,Wimco Nagar,?
 ,Wimco Nagar Depot,?
 0x011140,St.Thomas Mount,?
 0x012140,Alandur,? Name shortened
@@ -42,3 +42,20 @@ terminal_id,station_name,comments
 0x01F140,Nehru Park,?
 0x020140,Egmore,?
 0x021140,Central,? Name shortened
+,Poonamallee Bypass,? Unopened Line
+,Poonamallee,? Unopened Line
+,Mullaithottam,? Unopened Line
+,Karyanchavadi,? Unopened Line
+,Kumananchavadi,? Unopened Line
+,Kattupakkam,? Unopened Line
+,Iyappanthangal,? Unopened Line
+,Thelliyaragaram,? Unopened Line
+,Porur Bypass,? Unopened Line
+,Porur Junction,? Unopened Line
+,Alapakkam,? Unopened Line
+,Karambakkam,? Unopened Line
+,Valasaravakkam,? Unopened Line
+,Alwarthirunagar,? Unopened Line
+,Saligramam Warehouse,? Unopened Line
+,Saligramam,? Unopened Line
+,Vadapalani,? Unopened Line

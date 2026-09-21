@@ -1,6 +1,0 @@
-acquirer_id,operator_id,operator_name,terminal_info
-0x0B,0x177D,Chennai Metro,cmrl.csv
-0x04,0x3630,Hyderabad Metro,hmrl.csv
-0x02,0x0001,Bengaluru Metro,bmrcl.csv
-0x01,0x0001,MTC Chennai,mtcc.csv
-0x00,0x0000,Unknown/Empty,000000.csv

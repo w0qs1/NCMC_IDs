@@ -1,7 +1,4 @@
 *.json
-<<<<<<< HEAD
 __pycache__/
 *.pyc
 data/*.db-journal
-=======
->>>>>>> ee183fa (Modified to proper csv format with scripts to auto-extract operator and station info)

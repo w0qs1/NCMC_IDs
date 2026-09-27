@@ -1,74 +1,69 @@
--- NCMC operator / station ID database
+-- NCMC operator / station ID database  (schema version 2)
 -- ---------------------------------------------------------------------------
 -- Hierarchy:
 --
---   operators   one row per (acquirer_id, operator_id)      <- master list
+--   operators   one row per operator                        <- master list
 --      |
---      +-- stations   many rows per operator, one per terminal-ID pattern
+--      +-- stations   many rows per operator, one per reader-ID pattern
 --
 -- All IDs are stored as UPPERCASE hex text WITHOUT a "0x" prefix so they are
 -- readable in any SQLite browser:
---   acquirer_id       2 hex digits  (1 byte)   e.g. 0B
---   operator_id       4 hex digits  (2 bytes)  e.g. 177D
---   terminal_pattern  6 hex digits  (3 bytes)  e.g. 001140 or 323XXX
+--   operators.id       6 hex digits = acquirer ID (1 byte) + operator ID (2 bytes)
+--                      e.g. 0B177D = acquirer 0B, operator 177D
+--   stations.reader_id 6 hex digits (3 bytes), '?' = any digit
+--                      e.g. 001140 (exact) or 126??? (any gate of station 126)
 --
--- In terminal_pattern an 'X' is a wildcard nibble: 323XXX matches 323000
--- through 323FFF, so the first 3 digits can identify a station while the
--- last 3 (gate / terminal) may be anything.  When several patterns match a
--- terminal, the one with the fewest wildcards wins (an exact ID overrides a
--- mask).
+-- When several patterns match a reader ID, the one with the fewest '?' wins
+-- (an exact ID overrides a mask).
+--
+-- The CSV files for Metrodroid are generated from these tables:
+--   operators.csv   id,name,mode
+--   stations.csv    reader_id,stop_name,operator_id
+-- The `comments` column is for maintainers only and is not exported.
 -- ---------------------------------------------------------------------------
 
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE operators (
-    acquirer_id  TEXT NOT NULL
-                 CHECK (length(acquirer_id) = 2
-                        AND acquirer_id NOT GLOB '*[^0-9A-F]*'),
-    operator_id  TEXT NOT NULL
-                 CHECK (length(operator_id) = 4
-                        AND operator_id NOT GLOB '*[^0-9A-F]*'),
-    name         TEXT NOT NULL,
-    -- Name of the CSV generated for this operator's stations, e.g. cmrl.csv
-    station_file TEXT NOT NULL UNIQUE COLLATE NOCASE
-                 CHECK (station_file LIKE '%.csv'
-                        AND lower(station_file) <> 'operators.csv'
-                        AND station_file NOT GLOB '*[^A-Za-z0-9_.-]*'),
-    PRIMARY KEY (acquirer_id, operator_id)
+    id    TEXT NOT NULL PRIMARY KEY
+          CHECK (length(id) = 6 AND id NOT GLOB '*[^0-9A-F]*'),
+    name  TEXT NOT NULL CHECK (length(trim(name)) > 0),
+    mode  TEXT NOT NULL
+          CHECK (mode IN ('BUS', 'TRAIN', 'TRAM', 'METRO', 'FERRY',
+                          'TICKET_MACHINE', 'VENDING_MACHINE', 'POS', 'OTHER',
+                          'TROLLEYBUS', 'TOLL_ROAD', 'MONORAIL', 'CABLECAR'))
 );
 
 CREATE TABLE stations (
-    id               INTEGER PRIMARY KEY,   -- insertion order = export order
-    acquirer_id      TEXT NOT NULL,
-    operator_id      TEXT NOT NULL,
-    -- NULL = station is known but its terminal ID has not been decoded yet.
-    terminal_pattern TEXT
-                     CHECK (terminal_pattern IS NULL
-                            OR (length(terminal_pattern) = 6
-                                AND terminal_pattern NOT GLOB '*[^0-9A-FX]*')),
-    name             TEXT NOT NULL DEFAULT '',   -- '' = ID seen, name unknown
-    comments         TEXT NOT NULL DEFAULT '',   -- '?' marks uncertainty
-    -- Station names are NOT unique: interchange stations legitimately appear
+    id          INTEGER PRIMARY KEY,   -- row number (insertion order = export order)
+    operator_id TEXT NOT NULL,
+    -- NULL = station is known but its reader ID has not been decoded yet.
+    reader_id   TEXT
+                CHECK (reader_id IS NULL
+                       OR (length(reader_id) = 6
+                           AND reader_id NOT GLOB '*[^0-9A-F?]*')),
+    stop_name   TEXT NOT NULL DEFAULT '',   -- '' = ID seen, name unknown
+    comments    TEXT NOT NULL DEFAULT '',   -- maintainer notes; '?' marks uncertainty
+    -- Stop names are NOT unique: interchange stations legitimately appear
     -- under several IDs (one per line).
-    UNIQUE (acquirer_id, operator_id, terminal_pattern),
-    FOREIGN KEY (acquirer_id, operator_id)
-        REFERENCES operators (acquirer_id, operator_id)
+    UNIQUE (operator_id, reader_id),
+    FOREIGN KEY (operator_id) REFERENCES operators (id)
         ON UPDATE CASCADE ON DELETE RESTRICT
 );
 
-CREATE INDEX idx_stations_operator ON stations (acquirer_id, operator_id);
+CREATE INDEX idx_stations_operator ON stations (operator_id);
 
 -- Human-friendly, read-only listing (handy in DB Browser for SQLite).
 CREATE VIEW v_stations AS
-SELECT o.name                         AS operator,
-       '0x' || o.acquirer_id          AS acquirer_id,
-       '0x' || o.operator_id          AS operator_id,
-       '0x' || s.terminal_pattern     AS terminal_id,   -- NULL if undecoded
-       s.name                         AS station,
-       s.comments                     AS comments,
-       s.id                           AS station_row
+SELECT o.name                     AS operator,
+       o.mode                     AS mode,
+       '0x' || o.id               AS operator_id,
+       '0x' || s.reader_id        AS reader_id,      -- NULL if undecoded
+       s.stop_name                AS stop_name,
+       s.comments                 AS comments,
+       s.id                       AS station_row
 FROM stations s
-JOIN operators o USING (acquirer_id, operator_id)
+JOIN operators o ON o.id = s.operator_id
 ORDER BY o.rowid, s.id;
 
-PRAGMA user_version = 1;
+PRAGMA user_version = 2;

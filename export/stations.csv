@@ -40,6 +40,22 @@ reader_id,stop_name,operator_id
 0x01E???,Kilpauk,0x0B177D
 0x01F???,Nehru Park,0x0B177D
 0x020???,Egmore Metro,0x0B177D
+NULL,Poonamallee Bypass ,0x0B177D
+NULL,Poonamallee Bus Depot Metro,0x0B177D
+NULL,Poonamallee GH Metro,0x0B177D
+NULL,Karayanchavadi,0x0B177D
+NULL,Kumananchavadi,0x0B177D
+NULL,Kattupakkam,0x0B177D
+NULL,Iyyapanthangal,0x0B177D
+NULL,Thelliyaragaram,0x0B177D
+NULL,Porur Bypass Metro,0x0B177D
+NULL,Porur Junction,0x0B177D
+NULL,Alapakkam,0x0B177D
+NULL,Karambakkam,0x0B177D
+NULL,Valasaravakkam,0x0B177D
+NULL,Alwarthirunagar,0x0B177D
+NULL,Saligramam Warehouse,0x0B177D
+NULL,Saligramam,0x0B177D
 0x101???,Miyapur,0x043630
 0x102???,JNTU College,0x043630
 0x103???,KPHB Colony,0x043630

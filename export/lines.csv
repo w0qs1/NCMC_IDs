@@ -1,0 +1,10 @@
+id,name,operator_id,colour
+1,Blue Line,0x0B177D,#009EDB
+2,Green Line,0x0B177D,#459F0C
+3,Yellow Line,0x0B177D,#FFC000
+4,Red Line,0x043630,#E31E24
+5,Blue Line,0x043630,#007ABB
+6,Green Line,0x043630,#009846
+7,Green Line,0x020001,#009933
+8,Yellow Line,0x020001,#FFDF00
+9,Purple Line,0x020001,#8C2877

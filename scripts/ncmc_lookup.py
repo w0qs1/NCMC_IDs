@@ -9,8 +9,9 @@ Steps
   3. Look every operator and reader ID up in data/ncmc.db (wildcard patterns
      such as 323??? are honoured; the most specific match wins).
   4. For anything unknown, ask for an operator name and mode (BUS, METRO, ...)
-     or a station name, propose a wildcard pattern for the reader ID, and
-     save on confirmation.
+     or a station name, propose a wildcard pattern for the reader ID, ask
+     which line(s) the stop is on (several = interchange; a new line asks for
+     its RGB hex colour), and save on confirmation.
 
 An operator ID is the acquirer ID (1 byte) followed by the operator ID
 (2 bytes): acquirerId 0x0B + operatorId 0x177D -> 0x0B177D.
@@ -36,10 +37,11 @@ from typing import Optional
 
 from ncmc_common import (
     ACQUIRER_NIBBLES, DEFAULT_DB, MODES, OPERATOR_NIBBLES, READER_NIBBLES,
-    add_operator, add_station, connect, find_overlaps, fmt_hex, fmt_time,
-    get_operator, join_operator_id, lookup_station, normalize_mode,
-    normalize_pattern, parse_effective_date, pattern_matches, specificity,
-    split_operator_id, suggest_pattern, to_hex, transaction_time,
+    add_line, add_operator, add_station, connect, find_line, find_overlaps,
+    fmt_hex, fmt_time, get_operator, join_operator_id, link_station_line,
+    lookup_station, normalize_colour, normalize_mode, normalize_pattern,
+    operator_lines, parse_effective_date, pattern_matches, specificity,
+    split_operator_id, station_lines, suggest_pattern, to_hex, transaction_time,
 )
 
 # ===========================================================================
@@ -182,7 +184,13 @@ def describe(conn, loc: Location) -> tuple[str, str]:
     station = lookup_station(conn, loc.operator_id, loc.terminal)
     if station is None:
         return operator["name"], "unknown station"
-    return operator["name"], station["stop_name"] or "unnamed station"
+    name = station["stop_name"] or "unnamed station"
+    lines = station_lines(conn, station["id"])
+    if lines:
+        name += "  [" + ", ".join(
+            f"{l['name']} #{l['colour']}" if l["colour"] else l["name"]
+            for l in lines) + "]"
+    return operator["name"], name
 
 
 def matched_pattern_note(conn, loc: Location) -> str:
@@ -245,14 +253,16 @@ class Seen:
 @dataclass
 class Report:
     new_operators: list = field(default_factory=list)    # (id, name, mode)
-    new_stations: list = field(default_factory=list)     # (operator name, pattern, name)
+    new_stations: list = field(default_factory=list)     # (operator name, pattern, name, lines)
+    new_lines: list = field(default_factory=list)        # (operator name, line name, colour)
     named_stations: list = field(default_factory=list)   # (operator name, pattern, name)
     unresolved: list = field(default_factory=list)       # (operator id, reader, reason)
     invalid: list = field(default_factory=list)          # (txn index, role, Location)
 
     @property
     def changed(self) -> bool:
-        return bool(self.new_operators or self.new_stations or self.named_stations)
+        return bool(self.new_operators or self.new_stations or self.named_stations
+                    or self.new_lines)
 
 
 def collect_locations(dump: SafeDump):
@@ -335,6 +345,52 @@ def ask_pattern(conn, prompter, operator_id, reader,
         return pattern
 
 
+def ask_colour(prompter) -> Optional[str]:
+    """Ask for an RGB hex colour; Enter = none.  Keeps asking until valid."""
+    while True:
+        answer = prompter.ask("    Colour as RGB hex, e.g. #0072BC (Enter = none): ")
+        if not answer:
+            return None
+        colour = normalize_colour(answer)
+        if colour is not None:
+            return colour
+        print("    Need exactly six hex digits (RRGGBB).")
+
+
+def ask_lines(conn, prompter, operator_id, op_name, report) -> list:
+    """Ask which line(s) a stop is on; returns line rows (several = interchange).
+
+    Unknown names create a new line after asking for its colour.
+    """
+    existing = operator_lines(conn, operator_id)
+    if existing:
+        print("  Lines of this operator: " + ", ".join(
+            f"{l['name']} (#{l['colour']})" if l["colour"] else l["name"]
+            for l in existing))
+    answer = prompter.ask("  Line(s), comma-separated for an interchange (Enter = none): ")
+    chosen: list = []
+    for spec in (s.strip() for s in answer.split(",")):
+        if not spec:
+            continue
+        matches = find_line(conn, operator_id, spec)
+        if len(matches) == 1:
+            line = matches[0]
+        elif len(matches) > 1:
+            print(f"  {spec!r} is ambiguous ({', '.join(m['name'] for m in matches)}) - skipped.")
+            continue
+        else:
+            if prompter.ask(f"  New line {spec!r} for {op_name}. Create it? [Y/n]: ",
+                            "y").lower() != "y":
+                continue
+            colour = ask_colour(prompter)
+            line_id = add_line(conn, operator_id, spec, colour)
+            line = conn.execute("SELECT * FROM lines WHERE id = ?", (line_id,)).fetchone()
+            report.new_lines.append((op_name, line["name"], colour))
+        if all(line["id"] != c["id"] for c in chosen):
+            chosen.append(line)
+    return chosen
+
+
 def discover(conn, dump: SafeDump, prompter: Optional[Prompter]) -> Report:
     """Look everything up; when ``prompter`` is given, ask about the unknowns."""
     report = Report()
@@ -389,6 +445,9 @@ def discover(conn, dump: SafeDump, prompter: Optional[Prompter]) -> Report:
                 pattern = station["reader_id"]
                 conn.execute("UPDATE stations SET stop_name = ? WHERE id = ?",
                              (name, station["id"]))
+            if not station_lines(conn, station["id"]):
+                for line in ask_lines(conn, prompter, operator_id, op_row["name"], report):
+                    link_station_line(conn, station["id"], line["id"])
             report.named_stations.append((op_row["name"], pattern, name))
             continue
 
@@ -399,10 +458,14 @@ def discover(conn, dump: SafeDump, prompter: Optional[Prompter]) -> Report:
             report.unresolved.append((operator_id, reader, "name skipped"))
             continue
         pattern = ask_pattern(conn, prompter, operator_id, reader)
+        lines = ask_lines(conn, prompter, operator_id, op_row["name"], report)
         comments = prompter.ask("  Comments (optional, kept in the database only, "
                                 "e.g. '? ID estimated'): ")
-        add_station(conn, operator_id, pattern, name, comments)
-        report.new_stations.append((op_row["name"], pattern, name))
+        station_id = add_station(conn, operator_id, pattern, name, comments)
+        for line in lines:
+            link_station_line(conn, station_id, line["id"])
+        report.new_stations.append((op_row["name"], pattern, name,
+                                    ", ".join(l["name"] for l in lines)))
 
     return report
 
@@ -419,8 +482,11 @@ def print_summary(report: Report, prompted: bool) -> None:
 
     section("New operators", report.new_operators,
             lambda i: f"{i[1]} [{i[2]}] ({fmt_hex(i[0])})")
+    section("New lines", report.new_lines,
+            lambda i: f"{i[0]}: {i[1]} ({'#' + i[2] if i[2] else 'no colour'})")
     section("New stations", report.new_stations,
-            lambda i: f"{i[0]}: {fmt_hex(i[1])} = {i[2]}")
+            lambda i: f"{i[0]}: {fmt_hex(i[1])} = {i[2]}"
+                      + (f"  [{i[3]}]" if i[3] else ""))
     section("Stations named", report.named_stations,
             lambda i: f"{i[0]}: {fmt_hex(i[1])} = {i[2]}")
     section("Not resolved" + ("" if prompted else " (report-only mode)"), report.unresolved,

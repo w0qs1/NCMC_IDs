@@ -15,8 +15,21 @@ Examples
   python scripts/ncmc_db.py find hyderabad 0x323149
   python scripts/ncmc_db.py check
 
+Lines and colours (colour = RGB hex, with or without '#'; '-' clears it):
+  python scripts/ncmc_db.py add-line "Chennai Metro" "Blue Line" --colour "#0072BC"
+  python scripts/ncmc_db.py add-line "Chennai Metro" "Green Line" --colour 00A651
+  python scripts/ncmc_db.py lines "Chennai Metro"
+  python scripts/ncmc_db.py edit-line 2 --colour "#00A650"
+  python scripts/ncmc_db.py add-station 0x0B177D 0x001??? "Airport" -l Blue
+  python scripts/ncmc_db.py add-station 0x0B177D 0x002??? "Alandur" -l Blue -l Green
+  python scripts/ncmc_db.py edit-station 12 -l Green --remove-line Blue
+  python scripts/ncmc_db.py migrate                     # upgrade a v2 database
+
 An OPERATOR argument is the 6-digit operator ID (0x0B177D), or part of the
 operator's name (case-insensitive).  '?' in a reader ID matches any digit.
+A LINE argument is the line's name (case-insensitive; part of a name is fine
+if unambiguous) and always refers to a line of the station's own operator.
+A station on several lines (-l repeated) is an interchange.
 """
 
 from __future__ import annotations
@@ -30,9 +43,11 @@ from pathlib import Path
 
 from ncmc_common import (
     ACQUIRER_NIBBLES, DEFAULT_DB, MODES, OPERATOR_ID_NIBBLES, OPERATOR_NIBBLES,
-    READER_NIBBLES, add_operator, add_station, connect, find_overlaps, fmt_hex,
-    get_operator, init_schema, join_operator_id, lookup_station, normalize_mode,
-    normalize_pattern, patterns_overlap, specificity, to_hex,
+    READER_NIBBLES, add_line, add_operator, add_station, connect, find_line,
+    find_overlaps, fmt_colour, fmt_hex, format_lines, get_line, get_operator,
+    init_schema, join_operator_id, link_station_line, lookup_station, migrate,
+    normalize_colour, normalize_mode, normalize_pattern, parse_int,
+    patterns_overlap, specificity, station_lines, to_hex, unlink_station_line,
 )
 
 OPERATOR_ID_RE = re.compile(r"^(?:0x)?([0-9a-f]{%d})$" % OPERATOR_ID_NIBBLES, re.I)
@@ -104,6 +119,29 @@ def parse_mode_arg(text: str) -> str:
     return mode
 
 
+def parse_colour_arg(text: str):
+    """RGB hex -> 'RRGGBB'; '-' means 'no colour' (stored as NULL)."""
+    if text.strip() == "-":
+        return None
+    colour = normalize_colour(text)
+    if colour is None:
+        raise SystemExit(
+            f"Invalid colour {text!r}: need six hex digits (RRGGBB), e.g. #1E90FF.")
+    return colour
+
+
+def resolve_line(conn, operator_id: str, spec: str) -> sqlite3.Row:
+    """Turn a line name into exactly one line of the given operator."""
+    rows = find_line(conn, operator_id, spec)
+    if not rows:
+        raise SystemExit(f"This operator has no line matching {spec!r}. "
+                         "Add it with: ncmc_db.py add-line")
+    if len(rows) > 1:
+        names = ", ".join(r["name"] for r in rows)
+        raise SystemExit(f"Line {spec!r} is ambiguous: {names}")
+    return rows[0]
+
+
 def show_overlap_warning(conn, operator_id, pattern, ignore_id=None) -> None:
     for other in find_overlaps(conn, operator_id, pattern, ignore_id):
         print(f"  note: overlaps existing #{other['id']} "
@@ -112,7 +150,7 @@ def show_overlap_warning(conn, operator_id, pattern, ignore_id=None) -> None:
 
 
 # ---------------------------------------------------------------------------
-# CSV import (operators.csv + stations.csv)
+# CSV import (operators.csv + lines.csv + stations.csv)
 # ---------------------------------------------------------------------------
 
 def read_csv_rows(path: Path):
@@ -126,15 +164,21 @@ def read_csv_rows(path: Path):
 
 
 def import_csv(conn, directory: Path) -> dict:
-    """Load operators.csv (id,name,mode) and stations.csv
-    (reader_id,stop_name,operator_id) from ``directory``."""
+    """Load operators.csv (id,name,mode), the optional lines.csv
+    (id,name,operator_id,colour) and stations.csv
+    (reader_id,stop_name,operator_id[,line_ids]) from ``directory``.
+
+    Line ids in lines.csv are decimal and are kept as given; stations.csv
+    refers to them in ``line_ids``, separated by ';' (e.g. "1;3").
+    """
     operators_csv = directory / "operators.csv"
+    lines_csv = directory / "lines.csv"
     stations_csv = directory / "stations.csv"
     for path in (operators_csv, stations_csv):
         if not path.exists():
             raise SystemExit(f"{path} not found.")
 
-    stats = {"operators": 0, "stations": 0, "warnings": []}
+    stats = {"operators": 0, "lines": 0, "stations": 0, "warnings": []}
     warn = stats["warnings"].append
 
     for line, row in enumerate(read_csv_rows(operators_csv), start=2):
@@ -149,6 +193,26 @@ def import_csv(conn, directory: Path) -> dict:
             continue
         stats["operators"] += 1
 
+    if lines_csv.exists():
+        for line, row in enumerate(read_csv_rows(lines_csv), start=2):
+            operator_id = to_hex(row.get("operator_id"), OPERATOR_ID_NIBBLES,
+                                 hex_default=True)
+            if operator_id is None or get_operator(conn, operator_id) is None:
+                warn(f"lines.csv line {line}: unknown operator "
+                     f"{row.get('operator_id')!r} - skipped")
+                continue
+            line_id = parse_int(row.get("id"))
+            if line_id is None:
+                warn(f"lines.csv line {line}: invalid id {row.get('id')!r} - skipped")
+                continue
+            try:
+                add_line(conn, operator_id, row.get("name", ""),
+                         row.get("colour", ""), line_id)
+            except (sqlite3.IntegrityError, ValueError) as error:
+                warn(f"lines.csv line {line}: {row.get('name')!r} not imported ({error})")
+                continue
+            stats["lines"] += 1
+
     for line, row in enumerate(read_csv_rows(stations_csv), start=2):
         raw_id = row.get("reader_id", "")
         pattern = normalize_pattern(raw_id)
@@ -161,12 +225,22 @@ def import_csv(conn, directory: Path) -> dict:
                  f"{row.get('operator_id')!r} - skipped")
             continue
         try:
-            add_station(conn, operator_id, pattern, row.get("stop_name", ""))
+            station_id = add_station(conn, operator_id, pattern, row.get("stop_name", ""))
         except sqlite3.IntegrityError:
             warn(f"stations.csv line {line}: duplicate {raw_id!r} for "
                  f"{fmt_hex(operator_id)} - skipped")
             continue
         stats["stations"] += 1
+        for token in filter(None, (t.strip() for t in row.get("line_ids", "").split(";"))):
+            line_id = parse_int(token)
+            if line_id is None or get_line(conn, line_id) is None:
+                warn(f"stations.csv line {line}: unknown line {token!r} - not attached")
+                continue
+            try:
+                link_station_line(conn, station_id, line_id)
+            except sqlite3.IntegrityError:
+                warn(f"stations.csv line {line}: line {token} belongs to a different "
+                     "operator - not attached")
     return stats
 
 
@@ -198,19 +272,28 @@ def cmd_import_csv(args):
         stats = import_csv(conn, Path(args.directory))
     for message in stats["warnings"]:
         print(f"[!] {message}", file=sys.stderr)
-    print(f"Imported {stats['operators']} operator(s) and "
+    print(f"Imported {stats['operators']} operator(s), {stats['lines']} line(s) and "
           f"{stats['stations']} station row(s) into {db}")
+
+
+def cmd_migrate(args):
+    conn = connect(args.db, check_version=False)
+    if migrate(conn):
+        print(f"Upgraded {args.db} to schema version 3 (lines and station_lines added).")
+    else:
+        print(f"{args.db} is already up to date.")
 
 
 def cmd_operators(args):
     conn = connect(args.db)
     rows = conn.execute(
-        "SELECT o.*, (SELECT COUNT(*) FROM stations s WHERE s.operator_id = o.id) AS n "
+        "SELECT o.*, (SELECT COUNT(*) FROM stations s WHERE s.operator_id = o.id) AS n, "
+        "(SELECT COUNT(*) FROM lines l WHERE l.operator_id = o.id) AS nl "
         "FROM operators o ORDER BY o.rowid"
     ).fetchall()
-    print(f"{'ID':<10}{'Mode':<17}{'Stations':>8}  Name")
+    print(f"{'ID':<10}{'Mode':<17}{'Stations':>8}{'Lines':>7}  Name")
     for r in rows:
-        print(f"0x{r['id']:<8}{r['mode']:<17}{r['n']:>8}  {r['name']}")
+        print(f"0x{r['id']:<8}{r['mode']:<17}{r['n']:>8}{r['nl']:>7}  {r['name']}")
 
 
 def cmd_stations(args):
@@ -227,7 +310,72 @@ def cmd_stations(args):
         for r in rows:
             reader = fmt_hex(r["reader_id"]) if r["reader_id"] else "-"
             note = f"   {r['comments']}" if r["comments"] else ""
-            print(f"  #{r['id']:<4} {reader:<10} {r['stop_name'] or '(unnamed)'}{note}")
+            lines = station_lines(conn, r["id"])
+            tag = f"  [{format_lines(lines)}]" if lines else ""
+            print(f"  #{r['id']:<4} {reader:<10} {r['stop_name'] or '(unnamed)'}{tag}{note}")
+
+
+def cmd_lines(args):
+    conn = connect(args.db)
+    ops = ([resolve_operator(conn, args.operator)] if args.operator
+           else conn.execute("SELECT * FROM operators ORDER BY rowid").fetchall())
+    for op in ops:
+        print(f"\n{op['name']}  ({fmt_hex(op['id'])}, {op['mode']})")
+        rows = conn.execute(
+            "SELECT l.*, (SELECT COUNT(*) FROM station_lines sl WHERE sl.line_id = l.id) AS n "
+            "FROM lines l WHERE l.operator_id = ? ORDER BY l.id", (op["id"],)
+        ).fetchall()
+        if not rows:
+            print("  (no lines)")
+        for r in rows:
+            colour = f"#{r['colour']}" if r["colour"] else "-"
+            print(f"  #{r['id']:<4} {colour:<9} {r['name']}   ({r['n']} station row(s))")
+
+
+def cmd_add_line(args):
+    conn = connect(args.db)
+    op = resolve_operator(conn, args.operator)
+    colour = parse_colour_arg(args.colour) if args.colour else None
+    try:
+        with conn:
+            line_id = add_line(conn, op["id"], args.name, colour)
+    except sqlite3.IntegrityError:
+        raise SystemExit(f"{op['name']} already has a line named {args.name!r}.")
+    except ValueError as error:
+        raise SystemExit(str(error))
+    print(f"Added line #{line_id}: {args.name.strip()} ({fmt_colour(colour)}) "
+          f"on {op['name']}")
+
+
+def cmd_edit_line(args):
+    conn = connect(args.db)
+    row = get_line(conn, args.id)
+    if row is None:
+        raise SystemExit(f"No line with id {args.id}. See: ncmc_db.py lines")
+    name = row["name"] if args.name is None else args.name.strip()
+    colour = row["colour"] if args.colour is None else parse_colour_arg(args.colour)
+    if not name:
+        raise SystemExit("Line name must not be empty.")
+    try:
+        with conn:
+            conn.execute("UPDATE lines SET name = ?, colour = ? WHERE id = ?",
+                         (name, colour, args.id))
+    except sqlite3.IntegrityError:
+        raise SystemExit("Another line of this operator already has that name.")
+    print(f"Updated line #{args.id}: {name} ({fmt_colour(colour)})")
+
+
+def cmd_delete_line(args):
+    conn = connect(args.db)
+    row = get_line(conn, args.id)
+    if row is None:
+        raise SystemExit(f"No line with id {args.id}.")
+    used = conn.execute("SELECT COUNT(*) FROM station_lines WHERE line_id = ?",
+                        (args.id,)).fetchone()[0]
+    with conn:
+        conn.execute("DELETE FROM lines WHERE id = ?", (args.id,))
+    print(f"Deleted line {row['name']!r}"
+          + (f" (removed from {used} station row(s))." if used else "."))
 
 
 def cmd_add_operator(args):
@@ -263,15 +411,19 @@ def cmd_add_station(args):
     conn = connect(args.db)
     op = resolve_operator(conn, args.operator)
     pattern = parse_pattern_arg(args.reader_id)
+    lines = [resolve_line(conn, op["id"], spec) for spec in args.line or []]
     try:
         with conn:
             row_id = add_station(conn, op["id"], pattern, args.name, args.comments or "")
+            for line in lines:
+                link_station_line(conn, row_id, line["id"])
     except sqlite3.IntegrityError:
         raise SystemExit(f"{op['name']} already has {fmt_hex(pattern)}. "
                          "Use edit-station to change it.")
     if pattern:
         show_overlap_warning(conn, op["id"], pattern, ignore_id=row_id)
-    print(f"Added #{row_id}: {fmt_hex(pattern) if pattern else '-'} {args.name}")
+    on = f"  [{format_lines(station_lines(conn, row_id))}]" if lines else ""
+    print(f"Added #{row_id}: {fmt_hex(pattern) if pattern else '-'} {args.name}{on}")
 
 
 def cmd_edit_station(args):
@@ -282,17 +434,25 @@ def cmd_edit_station(args):
     name = row["stop_name"] if args.name is None else args.name.strip()
     comments = row["comments"] if args.comments is None else args.comments.strip()
     pattern = row["reader_id"] if args.reader_id is None else parse_pattern_arg(args.reader_id)
+    add_lines = [resolve_line(conn, row["operator_id"], s) for s in args.line or []]
+    drop_lines = [resolve_line(conn, row["operator_id"], s) for s in args.remove_line or []]
     try:
         with conn:
             conn.execute(
                 "UPDATE stations SET stop_name = ?, comments = ?, reader_id = ? WHERE id = ?",
                 (name, comments, pattern, args.id),
             )
+            for line in add_lines:
+                link_station_line(conn, args.id, line["id"])
+            for line in drop_lines:
+                unlink_station_line(conn, args.id, line["id"])
     except sqlite3.IntegrityError:
         raise SystemExit("Another station of this operator already uses that reader ID.")
     if pattern:
         show_overlap_warning(conn, row["operator_id"], pattern, ignore_id=args.id)
-    print(f"Updated #{args.id}: {fmt_hex(pattern) if pattern else '-'} {name}")
+    current = station_lines(conn, args.id)
+    on = f"  [{format_lines(current)}]" if current else ""
+    print(f"Updated #{args.id}: {fmt_hex(pattern) if pattern else '-'} {name}{on}")
 
 
 def cmd_delete_station(args):
@@ -342,8 +502,25 @@ def cmd_check(args):
     if fk:
         problems += len(fk)
         print(f"[!] {len(fk)} foreign-key violation(s)")
+    cross = conn.execute(
+        "SELECT COUNT(*) FROM station_lines sl "
+        "JOIN stations s ON s.id = sl.station_id JOIN lines l ON l.id = sl.line_id "
+        "WHERE s.operator_id <> l.operator_id").fetchone()[0]
+    if cross:
+        problems += cross
+        print(f"[!] {cross} station/line link(s) across different operators")
+    unused_lines = conn.execute(
+        "SELECT COUNT(*) FROM lines l WHERE NOT EXISTS "
+        "(SELECT 1 FROM station_lines sl WHERE sl.line_id = l.id)").fetchone()[0]
+    no_line = conn.execute(
+        "SELECT COUNT(*) FROM stations s JOIN operators o ON o.id = s.operator_id "
+        "WHERE NOT EXISTS (SELECT 1 FROM station_lines sl WHERE sl.station_id = s.id) "
+        "AND EXISTS (SELECT 1 FROM lines l WHERE l.operator_id = s.operator_id)"
+    ).fetchone()[0]
     print(f"Info: {unnamed} unnamed and {undecoded} undecoded station row(s) "
           f"(these are not exported); {empty_ops} operator(s) with no stations.")
+    print(f"Info: {unused_lines} line(s) with no stations; {no_line} station row(s) "
+          "of operators that have lines but are on none of them.")
     print("OK" if not problems else f"{problems} problem(s) found")
     return 1 if problems else 0
 
@@ -363,12 +540,35 @@ def build_parser():
     p.add_argument("--force", action="store_true", help="overwrite an existing database")
     p.set_defaults(func=cmd_init)
 
-    p = sub.add_parser("import-csv", help="import operators.csv + stations.csv from a directory")
+    p = sub.add_parser("import-csv", help="import operators.csv, lines.csv (optional) + stations.csv from a directory")
     p.add_argument("directory")
     p.set_defaults(func=cmd_import_csv)
 
+    p = sub.add_parser("migrate", help="upgrade a version-2 database to add lines")
+    p.set_defaults(func=cmd_migrate)
+
     p = sub.add_parser("operators", help="list operators")
     p.set_defaults(func=cmd_operators)
+
+    p = sub.add_parser("lines", help="list lines and colours (optionally for one operator)")
+    p.add_argument("operator", nargs="?")
+    p.set_defaults(func=cmd_lines)
+
+    p = sub.add_parser("add-line", help="add a line to an operator")
+    p.add_argument("operator", help="0x0B177D or part of the operator name")
+    p.add_argument("name", help="line name, e.g. 'Blue Line'")
+    p.add_argument("-C", "--colour", "--color", help="RGB hex, e.g. #0072BC")
+    p.set_defaults(func=cmd_add_line)
+
+    p = sub.add_parser("edit-line", help="change a line's name or colour by its row id")
+    p.add_argument("id", type=int)
+    p.add_argument("--name")
+    p.add_argument("-C", "--colour", "--color", help="new RGB hex, or '-' to clear")
+    p.set_defaults(func=cmd_edit_line)
+
+    p = sub.add_parser("delete-line", help="delete a line by its row id")
+    p.add_argument("id", type=int)
+    p.set_defaults(func=cmd_delete_line)
 
     p = sub.add_parser("stations", help="list stations (optionally for one operator)")
     p.add_argument("operator", nargs="?")
@@ -391,6 +591,8 @@ def build_parser():
     p.add_argument("reader_id", help="6 hex digits, ? = wildcard (0x126???); '-' if not decoded yet")
     p.add_argument("name", help="stop name")
     p.add_argument("-c", "--comments", help="maintainer note (not exported)")
+    p.add_argument("-l", "--line", action="append", metavar="LINE",
+                   help="line serving this stop (name); repeat for an interchange")
     p.set_defaults(func=cmd_add_station)
 
     p = sub.add_parser("edit-station", help="change a station by its row id")
@@ -398,6 +600,10 @@ def build_parser():
     p.add_argument("--name")
     p.add_argument("--reader-id", help="new reader ID pattern, or '-' to clear")
     p.add_argument("-c", "--comments")
+    p.add_argument("-l", "--line", action="append", metavar="LINE",
+                   help="also put the station on this line (repeatable)")
+    p.add_argument("--remove-line", action="append", metavar="LINE",
+                   help="take the station off this line (repeatable)")
     p.set_defaults(func=cmd_edit_station)
 
     p = sub.add_parser("delete-station", help="delete a station by its row id")

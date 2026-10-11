@@ -200,6 +200,20 @@ Use `ncmc_lookup.py` (it creates a line when you name one it does not know) or `
 
 Only lines that are open to the public may be added (see [Only Open Stations and Lines](#only-open-stations-and-lines)). Put every station on each line that serves it: an interchange station is linked to all of its open lines, and to nothing else.
 
+#### Which Line a Station Belongs To
+
+A station belongs to the line or lines that the operator officially lists it under, that is, the lines whose own stations appear on the operator's line map. **Inter-corridor (through) services are ignored.** Do not link a station to a line just because some trains of that line run over it.
+
+Example, Chennai Metro: some trains start at Central (Blue/Green Line), travel via Koyambedu (Green Line), switch to the Blue Line tracks after Alandur (Blue/Green Line), and end at Airport (Blue Line). The stations after Alandur up to Airport are on the **Blue Line** only, because that is their original line, even though those trains are Green Line services. Green Line stations such as Koyambedu stay on the **Green Line** only. Central and Alandur are listed under both lines, so they are linked to both.
+
+Use the same rule everywhere:
+
+- Decide by the lines the station is officially part of (the operator's line map), not by the route, colour or destination shown on a train.
+- A station is an interchange when it is officially part of two or more lines. This includes stations where lines **share the same tracks and platforms**: if the operator lists such a station under both lines, link it to both.
+- A service that runs onto another line's tracks (an inter-corridor service, short working or branch service) does not make the stations it passes part of its own line. Only the operator's own listing of the station counts.
+- If you cannot tell which line or lines a station is officially part of, leave its lines empty rather than guess.
+- Do not infer a station's lines from card transaction history. The history cannot show whether a passenger stayed on an inter-corridor service or walked to a different line at an interchange, so the same journey can look identical either way.
+
 ### Operator Naming Conventions
 
 Use short, recognizable operator names instead of complete legal entity names.
@@ -534,6 +548,7 @@ When correcting a wildcard mapping, explain why the previous pattern was incorre
 - Add only stations and lines that are open to the public, interchanges included.
 - Do not add a new line's name or colour to an existing station until that section opens.
 - Give lines their official RGB hex colour, or leave it empty.
+- Link a station only to the lines whose own corridor it is on; ignore inter-corridor services.
 - Do not duplicate existing operators or stations.
 - Treat each reader ID as a complete 24-bit operator-specific identifier.
 - Distinguish confirmed data from estimates.

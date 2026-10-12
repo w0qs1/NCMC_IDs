@@ -8,6 +8,18 @@ The source of truth is a SQLite database (`data/ncmc.db`). The three CSV files t
 
 > **Only open stations and lines belong here.** Stations and lines that are under construction, planned or not yet open to the public must not be added. See [Only Open Stations and Lines](#only-open-stations-and-lines).
 
+## Coverage
+
+Operators currently supported, and how many of their open stations have a decoded reader ID and name in the database (as of 12 October 2026):
+
+| # | Operator | Stations covered | Coverage |
+|---|---|---|---|
+| 1 | Chennai Metro | 51 / 51 | 100% |
+| 2 | Hyderabad Metro | 57 / 57 | 100% |
+| 3 | Bengaluru Metro | 6 / 83 | 7.23% |
+
+Coverage counts open stations only (see [Only Open Stations and Lines](#only-open-stations-and-lines)). A station counts as covered when its reader ID is decoded and it has a name. Contributions that extend Bengaluru Metro, or add a new operator, are welcome.
+
 ## Disclaimer
 
 ### Data Accuracy

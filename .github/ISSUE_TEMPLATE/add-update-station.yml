@@ -17,6 +17,7 @@ body:
       label: What would you like to do?
       options:
         - Add a new station / reader ID
+        - Add another reader ID to an existing station (e.g. an interchange with a separate ID per line)
         - Correct the name of an existing station
         - Correct the reader ID of an existing station
         - Add or change the lines of a station
@@ -43,19 +44,19 @@ body:
     id: reader_id
     attributes:
       label: Reader ID
-      description: 3-byte reader ID as `0x` plus 6 characters (hex digits, or `?` for any digit), e.g. `0x001140` or `0x126???`. Leave empty if the station is known but its ID has not been decoded. Please do not invent IDs.
+      description: 3-byte reader ID as `0x` plus 6 characters (hex digits, or `?` for any digit), e.g. `0x001140` or `0x126???`. For an additional ID of an existing station, give the new ID here. Leave empty if the station is known but its ID has not been decoded. Please do not invent IDs.
       placeholder: "0x126???"
   - type: input
     id: lines
     attributes:
       label: Line(s)
-      description: Lines the operator officially lists the station under; separate with commas for an interchange. Ignore inter-corridor (through) services. Leave empty if you cannot tell.
+      description: Lines the operator officially lists the station under; separate with commas for an interchange. For an additional ID, give the line or lines that this particular ID serves. Ignore inter-corridor (through) services. Leave empty if you cannot tell.
       placeholder: Blue Line, Green Line
   - type: input
     id: current_entry
     attributes:
-      label: Existing entry (updates and removals only)
-      description: Current station name and reader ID in the database.
+      label: Existing entry (updates, removals and additional IDs)
+      description: Current station name and reader ID in the database. For an additional ID, give the existing entry the new ID belongs to (for example, the other line's entry at an interchange).
   - type: dropdown
     id: evidence
     attributes:

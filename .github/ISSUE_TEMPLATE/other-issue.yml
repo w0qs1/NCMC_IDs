@@ -1,0 +1,67 @@
+name: Other issue
+description: Report a bug, suggest an improvement, ask a question, or raise anything the other forms do not cover
+title: "[Other] <short summary>"
+labels: ["other"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for anything that is **not** a request to add or change an operator, line or station. For those, please use the dedicated forms so the right details are collected.
+
+        **Do not attach Metrodroid JSON dumps or card screenshots.** They contain personal data. Share only the IDs and details asked for below.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of issue is this?
+      options:
+        - Bug in the scripts or tooling
+        - Problem in the data (duplicate, conflicting or inconsistent entries)
+        - Problem with the exported CSV files
+        - Documentation or guideline improvement
+        - Feature request or suggestion
+        - Question
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe the problem, idea or question. Be as specific as you can.
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Steps to reproduce or supporting details (optional)
+      description: For a bug, list the commands you ran and what happened. For a data problem, list the affected operator, station or reader IDs and why you think they are wrong.
+      placeholder: |
+        1. Run `python scripts/ncmc_db.py check`
+        2. ...
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour or proposed solution (optional)
+      description: What should happen instead, or how would you like it to work?
+  - type: input
+    id: environment
+    attributes:
+      label: Environment (optional, for bugs)
+      description: Python version and operating system.
+      placeholder: Python 3.12, Windows 11
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context (optional)
+      description: Links, logs (with any personal data removed) or anything else that helps.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched the open and closed issues and did not find this already reported.
+          required: true
+        - label: This is not a request to add or change an operator, line or station (those have their own forms).
+          required: true
+        - label: I have not attached any personal data (card number, UID, name, balance, raw JSON dump).
+          required: true

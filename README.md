@@ -205,7 +205,8 @@ You do not need to run the scripts or edit the database to help. If you have spo
 |---|---|---|
 | **Add new operator** | Propose an operator that is not in `operators.csv` | Short operator name, operator ID (`0x` + 6 hex digits), mode, how the ID was obtained |
 | **Add or update line** | Add a line, change a line's name or colour, or remove a closed line | Operator, line name, RGB hex colour, link to the official map, current name for updates |
-| **Add or update station** | Add a station or reader ID, fix a name, reader ID or lines, or remove a closed station | Operator, station name, reader ID or mask, line(s), evidence, comments on anything uncertain |
+| **Add or update station** | Add a station or reader ID (including an additional ID for an existing station, such as an interchange with a separate ID per line), fix a name, reader ID or lines, or remove a closed station | Operator, station name, reader ID or mask, line(s), evidence, comments on anything uncertain |
+| **Other issue** | Report a script bug, a data or export problem, suggest an improvement, or ask a question | Type of issue, description, and steps to reproduce or affected IDs where relevant |
 
 If the operator does not exist yet, file **Add new operator** first and then the line and station issues that depend on it.
 

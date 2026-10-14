@@ -1,0 +1,81 @@
+name: Add new operator
+description: Propose a transit operator that is not yet in the database
+title: "[Operator] Add <operator name>"
+labels: ["operator", "new"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for contributing! Please check `export/operators.csv` first (or run `python scripts/ncmc_db.py find <name>`) so the operator is not added twice.
+
+        **Do not attach Metrodroid JSON dumps or card screenshots.** They contain personal data. Share only the IDs asked for below.
+  - type: input
+    id: name
+    attributes:
+      label: Operator name
+      description: Short, recognizable name, not the legal entity name (e.g. `Bengaluru Metro`, not `Bangalore Metro Rail Corporation Limited`).
+      placeholder: Bengaluru Metro
+    validations:
+      required: true
+  - type: input
+    id: operator_id
+    attributes:
+      label: Operator ID
+      description: Acquirer ID (1 byte) followed by operator ID (2 bytes), written as `0x` plus 6 hex digits.
+      placeholder: "0x0B177D"
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      description: Use `METRO` for metro rail and `BUS` for buses; use `OTHER` when nothing fits.
+      options:
+        - BUS
+        - TRAIN
+        - TRAM
+        - METRO
+        - FERRY
+        - TICKET_MACHINE
+        - VENDING_MACHINE
+        - POS
+        - OTHER
+        - TROLLEYBUS
+        - TOLL_ROAD
+        - MONORAIL
+        - CABLECAR
+    validations:
+      required: true
+  - type: dropdown
+    id: evidence
+    attributes:
+      label: How was the operator ID obtained?
+      options:
+        - Directly observed on an NCMC card
+        - Estimated or inferred
+        - Other (explain below)
+    validations:
+      required: true
+  - type: textarea
+    id: first_stations
+    attributes:
+      label: Known reader IDs and stations (optional)
+      description: One per line as `reader ID, station name, line`. Only stations that are open to the public. Mark anything uncertain with `?`.
+      placeholder: |
+        0x001140, Airport Metro, Blue Line
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Anything else reviewers should know (source, how you decoded it, doubts).
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: The operator is not already listed in `export/operators.csv`.
+          required: true
+        - label: I have not attached any personal data (card number, UID, name, balance, raw JSON dump).
+          required: true
+        - label: I have only included services that are open to the public.
+          required: true

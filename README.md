@@ -189,6 +189,46 @@ Bare hex (`0B177D`), a lowercase `0x`, and the older `X` wildcard are accepted o
 python -m unittest discover -s tests -v
 ```
 
+## Contributing
+
+You do not need to run the scripts or edit the database to help. If you have spotted a missing operator, line or station, or a wrong mapping, **open an issue** and a maintainer can apply it. Each issue form asks for exactly the details needed, so it is the quickest way to report data.
+
+### How to Open an Issue
+
+1. **Check for duplicates.** Search the open and closed issues, then look in `export/` or run `python scripts/ncmc_db.py find "<operator>" <reader ID>`. Remember that a wildcard mask such as `0x123???` may already cover the ID you found.
+2. Go to the repository's **Issues** tab and click **New issue**.
+3. **Choose the template** that matches your report (see the table below).
+4. **Fill in the form.** Fields marked as required must be completed. Tick the checklist at the end to confirm the data is open to the public and contains no personal data.
+5. **Submit.** A maintainer will review it and may ask for more evidence, for example further observed reader IDs.
+
+| Template | Use it to | You will be asked for |
+|---|---|---|
+| **Add new operator** | Propose an operator that is not in `operators.csv` | Short operator name, operator ID (`0x` + 6 hex digits), mode, how the ID was obtained |
+| **Add or update line** | Add a line, change a line's name or colour, or remove a closed line | Operator, line name, RGB hex colour, link to the official map, current name for updates |
+| **Add or update station** | Add a station or reader ID, fix a name, reader ID or lines, or remove a closed station | Operator, station name, reader ID or mask, line(s), evidence, comments on anything uncertain |
+
+If the operator does not exist yet, file **Add new operator** first and then the line and station issues that depend on it.
+
+### Finding the Details for an Issue
+
+The easiest way to collect IDs from a card is the read-only report from the lookup script, which shows operator IDs and reader IDs without saving anything:
+
+```bash
+python scripts/ncmc_lookup.py my_card.json --no-prompt
+```
+
+Copy only the operator ID and reader IDs into the issue, together with the station you were at. Use the guidance in the sections below for names, masks and lines: [Station Naming Conventions](#station-naming-conventions), [Which Line a Station Belongs To](#which-line-a-station-belongs-to) and [Uncertain or Incomplete Mappings](#uncertain-or-incomplete-mappings).
+
+### What to Leave Out of an Issue
+
+- **Never attach or paste a Metrodroid JSON dump or a card screenshot.** They contain personal data such as the card number, serial/UID, holder name and balance. Share only the IDs requested by the form.
+- **Do not report stations or lines that are not open yet**, including their expected names, colours or reader IDs (see [Only Open Stations and Lines](#only-open-stations-and-lines)).
+- **Do not invent reader IDs.** If a station's ID is unknown, leave the field empty; if it is estimated, say so in the notes.
+
+### Prefer to Send a Pull Request?
+
+Pull requests are welcome too. Follow the [Contribution Guidelines](#contribution-guidelines) below and include both the updated `data/ncmc.db` and the regenerated `export/` files.
+
 ## Contribution Guidelines
 
 Contributions should include both the updated `data/ncmc.db` and the regenerated `export/` files. The CSV diff is what reviewers read, since a SQLite file cannot be diffed as text.

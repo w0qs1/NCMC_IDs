@@ -84,7 +84,7 @@ mode  BUS, METRO, ...      colour  RRGGBB hex, or NULL                 (or NULL 
 ```
 
 - **`operators`** is the master list. `id` is the primary key, so an operator can exist only once. It is the acquirer ID (1 byte) followed by the operator ID (2 bytes): acquirer `0x0B` + operator `0x177D` = `0x0B177D`.
-- **`mode`** is one of `BUS, TRAIN, TRAM, METRO, FERRY, TICKET_MACHINE, VENDING_MACHINE, POS, OTHER, TROLLEYBUS, TOLL_ROAD, MONORAIL, CABLECAR`.
+- **`mode`** is one of `BUS, TRAIN, TRAM, METRO, FERRY, TICKET_MACHINE, VENDING_MACHINE, POS, OTHER, TROLLEYBUS, TOLL_ROAD, MONORAIL, CABLECAR, PARKING`.
 - **`stations`** holds every stop / reader-ID pattern, each belonging to exactly one operator. There is one shared table rather than one table per operator, so adding an operator never requires changing the schema; the list for an operator is what you get by filtering on its `id`.
 - **`reader_id`** is the 3-byte reader (terminal) ID. A `?` matches any hex digit, so `0x126???` covers every gate of station `126`. When several patterns of an operator match, the one with the fewest `?` wins.
 - IDs are stored as uppercase hex text without `0x`, which keeps them readable in any SQLite browser. The database rejects malformed IDs, unknown modes, duplicate patterns within an operator, and stations that point at a non-existent operator.
@@ -240,7 +240,7 @@ Use `ncmc_lookup.py` (it asks for the name and mode), or `ncmc_db.py add-operato
 
 - `id`: the acquirer ID (1 byte) followed by the operator ID (2 bytes), e.g. `0x0B177D`
 - `name`: see the naming conventions below
-- `mode`: one of `BUS, TRAIN, TRAM, METRO, FERRY, TICKET_MACHINE, VENDING_MACHINE, POS, OTHER, TROLLEYBUS, TOLL_ROAD, MONORAIL, CABLECAR`. Use `METRO` for metro rail and `BUS` for buses; use `OTHER` when nothing fits.
+- `mode`: one of `BUS, TRAIN, TRAM, METRO, FERRY, TICKET_MACHINE, VENDING_MACHINE, POS, OTHER, TROLLEYBUS, TOLL_ROAD, MONORAIL, CABLECAR, PARKING`. Use `METRO` for metro rail and `BUS` for buses; use `OTHER` when nothing fits.
 
 The `id` is unique to each operator, and the database will refuse duplicates.
 

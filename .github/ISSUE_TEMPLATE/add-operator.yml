@@ -44,6 +44,7 @@ body:
         - TOLL_ROAD
         - MONORAIL
         - CABLECAR
+        - PARKING
     validations:
       required: true
   - type: dropdown

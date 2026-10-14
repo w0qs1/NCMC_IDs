@@ -100,7 +100,7 @@ class ModeTests(unittest.TestCase):
         self.assertEqual(MODES, (
             "BUS", "TRAIN", "TRAM", "METRO", "FERRY", "TICKET_MACHINE",
             "VENDING_MACHINE", "POS", "OTHER", "TROLLEYBUS", "TOLL_ROAD",
-            "MONORAIL", "CABLECAR"))
+            "MONORAIL", "CABLECAR", "PARKING"))
 
     def test_normalize_mode(self):
         self.assertEqual(normalize_mode("metro"), "METRO")

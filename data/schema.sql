@@ -43,7 +43,7 @@ CREATE TABLE operators (
     mode  TEXT NOT NULL
           CHECK (mode IN ('BUS', 'TRAIN', 'TRAM', 'METRO', 'FERRY',
                           'TICKET_MACHINE', 'VENDING_MACHINE', 'POS', 'OTHER',
-                          'TROLLEYBUS', 'TOLL_ROAD', 'MONORAIL', 'CABLECAR'))
+                          'TROLLEYBUS', 'TOLL_ROAD', 'MONORAIL', 'CABLECAR', 'PARKING'))
 );
 
 CREATE TABLE stations (

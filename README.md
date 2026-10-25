@@ -143,7 +143,7 @@ python scripts/ncmc_db.py operators
 python scripts/ncmc_db.py stations "Chennai Metro"
 python scripts/ncmc_db.py add-operator 0x0B177D "Chennai Metro" METRO
 python scripts/ncmc_db.py edit-operator chennai --mode METRO
-python scripts/ncmc_db.py add-station 0x0B177D 0x001??? "Airport Metro"
+python scripts/ncmc_db.py add-station 0x0B177D 0x001??? "Airport"
 python scripts/ncmc_db.py add-station 0x0B177D - "Mannadi" -c "?"        # ID not decoded yet
 python scripts/ncmc_db.py edit-station 12 --name "Alandur" --comments "? Name shortened"
 python scripts/ncmc_db.py find hyderabad 0x323149
@@ -157,7 +157,7 @@ python scripts/ncmc_db.py add-line "Chennai Metro" "Blue Line" --colour "#0072BC
 python scripts/ncmc_db.py add-line "Chennai Metro" "Green Line" -C 00A651
 python scripts/ncmc_db.py lines "Chennai Metro"                         # shows line ids
 python scripts/ncmc_db.py edit-line 2 --colour "#00A650"                # or --name "..."
-python scripts/ncmc_db.py add-station 0x0B177D 0x001??? "Airport Metro" -l Blue
+python scripts/ncmc_db.py add-station 0x0B177D 0x001??? "Airport" -l Blue
 python scripts/ncmc_db.py add-station 0x0B177D 0x002??? "Alandur" -l Blue -l Green   # interchange
 python scripts/ncmc_db.py edit-station 12 -l Green                      # add a line to a station
 python scripts/ncmc_db.py edit-station 12 --remove-line Blue            # take a line off a station
@@ -281,10 +281,7 @@ Use short, recognizable operator names instead of complete legal entity names.
 - Use a concise and recognizable operator name.
 - Avoid unnecessarily long legal entity names.
 - Maintain consistent naming across the repository.
-- Remove "Metro" prefix from station names unless there is a Railway Station/Major Bus Station/Airport with the same name/or in vicinity of the station.
-- Example 1: Guindy Metro -> applicable because there is a railway station with name "Guindy"
-- Example 2: Airport Metro -> applicable because this serves the airport
-- Example 3: Nandanam -> not applicable in this case as there is no railway station with name "Nandanam"
+- Remove "Metro" suffix from station names; Redundant as Operator name will contain "Metro".
 - Do not create duplicate entries for an existing operator with same reader_id.
 
 ### Exported CSV Format
@@ -312,7 +309,7 @@ id,name,operator_id,colour
 
 ```text
 reader_id,stop_name,operator_id,line_ids
-0x001140,Airport Metro,0x0B177D,1
+0x001140,Airport,0x0B177D,1
 0x002???,Alandur,0x0B177D,1;2
 0x126???,Victoria Memorial,0x043630,
 ```
@@ -347,7 +344,7 @@ Examples:
 
 ```text
 Ameerpet
-Central Metro
+Central
 Thousand Lights
 ```
 
@@ -367,13 +364,13 @@ When a station has an extremely long official name, use a shorter, recognizable 
 
 | Original Name | Repository Name |
 |---|---|
-| Puratchi Thalaivar Dr.M.G.Ramachandran Central Metro | Central Metro |
+| Puratchi Thalaivar Dr.M.G.Ramachandran Central Metro| Central |
 
 When a station name is shortened, mention it in the `comments` column:
 
 ```csv
 reader_id,stop_name,comments
-0x00E140,Central Metro,? Name shortened
+0x00E140,Central,? Name shortened
 ```
 
 Avoid unnecessary abbreviations that make the station difficult to identify.
@@ -519,7 +516,7 @@ This may include:
 reader_id,stop_name,comments
 0x00F140,High Court,?
 0x010140,New Station,? ID estimated
-0x00E140,Central Metro,? Name shortened
+0x00E140,Central,? Name shortened
 0x123???,Example Station,? AFC gate identifier masked
 ```
 
@@ -530,7 +527,7 @@ Example:
 ```csv
 reader_id,stop_name,comments
 ,Mannadi,?
-,Washermanpet Metro,?
+,Washermanpet,?
 ```
 
 Do not invent reader IDs to fill missing values.

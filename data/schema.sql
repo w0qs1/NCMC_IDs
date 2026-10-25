@@ -42,8 +42,8 @@ CREATE TABLE operators (
     name  TEXT NOT NULL CHECK (length(trim(name)) > 0),
     mode  TEXT NOT NULL
           CHECK (mode IN ('BUS', 'TRAIN', 'TRAM', 'METRO', 'FERRY',
-                          'TICKET_MACHINE', 'VENDING_MACHINE', 'POS', 'OTHER',
-                          'TROLLEYBUS', 'TOLL_ROAD', 'MONORAIL', 'CABLECAR', 'PARKING'))
+                          'TICKET_MACHINE', 'POS', 'OTHER', 'TOLL_ROAD',
+                          'MONORAIL', 'CABLECAR', 'PARKING', 'HSR'))
 );
 
 CREATE TABLE stations (

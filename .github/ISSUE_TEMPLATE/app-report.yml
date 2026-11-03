@@ -1,0 +1,80 @@
+name: Report from app
+description: Report reader ID observed by the NCMC app
+title: "[Station] <operator> - <station name>"
+labels: ["station", "app-report"]
+
+body:
+  - type: input
+    id: operator_id
+    attributes:
+      label: Operator ID
+      description: Automatically provided by the app.
+      placeholder: "0x0B177D"
+    validations:
+      required: true
+
+  - type: input
+    id: operator_name
+    attributes:
+      label: Operator name
+      description: Automatically provided by the app when available. Otherwise enter the operator name.
+      placeholder: Chennai Metro
+    validations:
+      required: true
+
+  - type: dropdown
+    id: operator_type
+    attributes:
+      label: Operator type
+      description: Automatically selected by the app when available.
+      options:
+        - METRO
+        - TRAIN
+        - TRAM
+        - BUS
+        - MONORAIL
+        - HSR
+        - FERRY
+        - CABLECAR
+        - TOLL_ROAD
+        - PARKING
+        - TICKET_MACHINE
+        - POS
+        - OTHER
+    validations:
+      required: true
+
+  - type: input
+    id: station_id
+    attributes:
+      label: Station ID
+      description: Full 3-byte station/reader ID observed by the app. Do not mask any digits.
+      placeholder: "0x0347A2"
+    validations:
+      required: true
+
+  - type: input
+    id: station_name
+    attributes:
+      label: Station name
+      description: Automatically provided by the app when already known. Otherwise enter the official station name.
+      placeholder: Alapakkam
+    validations:
+      required: true
+
+  - type: input
+    id: lines
+    attributes:
+      label: Line name
+      description: Automatically provided by the app when available. If the station is an interchange, enter all applicable lines separated by commas.
+      placeholder: Yellow Line, Red Line
+    validations:
+      required: true
+
+  - type: textarea
+    id: comments
+    attributes:
+      label: Comments
+      description: Optional. Add anything useful about this report.
+    validations:
+      required: false

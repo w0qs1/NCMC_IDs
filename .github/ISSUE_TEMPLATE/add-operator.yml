@@ -37,14 +37,13 @@ body:
         - METRO
         - FERRY
         - TICKET_MACHINE
-        - VENDING_MACHINE
         - POS
         - OTHER
-        - TROLLEYBUS
         - TOLL_ROAD
         - MONORAIL
         - CABLECAR
         - PARKING
+        - HSR
     validations:
       required: true
   - type: dropdown
@@ -63,7 +62,7 @@ body:
       label: Known reader IDs and stations (optional)
       description: One per line as `reader ID, station name, line`. Only stations that are open to the public. Mark anything uncertain with `?`.
       placeholder: |
-        0x001140, Airport Metro, Blue Line
+        0x001140, Airport, Blue Line
   - type: textarea
     id: notes
     attributes:

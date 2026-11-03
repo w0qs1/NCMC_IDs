@@ -60,7 +60,7 @@ body:
       description: Automatically provided by the app when already known. Otherwise enter the official station name.
       placeholder: Alapakkam
     validations:
-      required: true
+      required: false
 
   - type: input
     id: lines
@@ -69,7 +69,7 @@ body:
       description: Automatically provided by the app when available. If the station is an interchange, enter all applicable lines separated by commas.
       placeholder: Yellow Line, Red Line
     validations:
-      required: true
+      required: false
 
   - type: textarea
     id: comments

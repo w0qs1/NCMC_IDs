@@ -9,7 +9,6 @@ body:
     attributes:
       label: Operator ID
       description: Automatically provided by the app.
-      placeholder: "0x0B177D"
     validations:
       required: true
 
@@ -18,7 +17,6 @@ body:
     attributes:
       label: Operator name
       description: Automatically provided by the app when available. Otherwise enter the operator name.
-      placeholder: Chennai Metro
     validations:
       required: true
 
@@ -49,7 +47,6 @@ body:
     attributes:
       label: Station ID
       description: Full 3-byte station/reader ID observed by the app. Do not mask any digits.
-      placeholder: "0x0347A2"
     validations:
       required: true
 
@@ -58,7 +55,6 @@ body:
     attributes:
       label: Station name
       description: Automatically provided by the app when already known. Otherwise enter the official station name.
-      placeholder: Alapakkam
     validations:
       required: false
 
@@ -67,7 +63,6 @@ body:
     attributes:
       label: Line name
       description: Automatically provided by the app when available. If the station is an interchange, enter all applicable lines separated by commas.
-      placeholder: Yellow Line, Red Line
     validations:
       required: false
 

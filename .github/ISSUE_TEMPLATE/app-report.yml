@@ -54,7 +54,7 @@ body:
     id: station_name
     attributes:
       label: Station name
-      description: Automatically provided by the app when already known. Otherwise enter the official station name.
+      description: Automatically provided by the app when already known. Otherwise enter the official station name if applicable.
     validations:
       required: false
 

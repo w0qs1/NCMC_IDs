@@ -3,3 +3,4 @@ id,name,mode
 0x043630,Hyderabad Metro,METRO
 0x010001,MTC Chennai,BUS
 0x020001,Bengaluru Metro,METRO
+0x050000,BMTC Bengaluru,BUS

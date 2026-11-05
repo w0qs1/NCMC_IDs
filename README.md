@@ -16,7 +16,7 @@ Operators currently supported, and how many of their open stations have a decode
 |---|---|---|---|
 | 1 | Chennai Metro | 51 / 51 | 100% |
 | 2 | Hyderabad Metro | 57 / 57 | 100% |
-| 3 | Bengaluru Metro | 6 / 83 | 7.23% |
+| 3 | Bengaluru Metro | 7 / 83 | 8.43% |
 
 Coverage counts open stations only (see [Only Open Stations and Lines](#only-open-stations-and-lines)). A station counts as covered when its reader ID is decoded and it has a name. Contributions that extend Bengaluru Metro, or add a new operator, are welcome.
 

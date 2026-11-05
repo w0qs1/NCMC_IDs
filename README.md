@@ -10,7 +10,7 @@ The source of truth is a SQLite database (`data/ncmc.db`). The three CSV files t
 
 ## Coverage
 
-Operators currently supported, and how many of their open stations have a decoded reader ID and name in the database (as of 12 October 2026):
+Operators currently supported, and how many of their open stations have a decoded reader ID and name in the database (as of 5 November 2026):
 
 | # | Operator | Stations covered | Coverage |
 |---|---|---|---|

@@ -116,3 +116,5 @@ reader_id,stop_name,operator_id,line_ids
 0x0F8???,Yelachenahalli,0x020001,7
 0x128???,BTM Layout,0x020001,8
 0x064???,K.R. Pura,0x020001,9
+0x??????,Bus Ticket,0x010001,
+0x??????,Bus Ticket,0x050000,

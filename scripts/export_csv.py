@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Export the database as three CSV files for inclusion in Metrodroid.
 
-  export/operators.csv    id,name,mode
+  export/operators.csv    id,name,mode,timezone
   export/lines.csv        id,name,operator_id,colour
   export/stations.csv     reader_id,stop_name,operator_id,line_ids
 
 Example rows:
-  operators.csv   0x0B177D,Chennai Metro,METRO
+  operators.csv   0x0B177D,Chennai Metro,METRO,IST
   lines.csv       1,Blue Line,0x0B177D,#0072BC
                   2,Green Line,0x0B177D,#00A651
   stations.csv    0x001140,Airport,0x0B177D,1
@@ -36,7 +36,7 @@ from pathlib import Path
 
 from ncmc_common import DEFAULT_DB, DEFAULT_EXPORT_DIR, connect
 
-OPERATOR_HEADER = ["id", "name", "mode"]
+OPERATOR_HEADER = ["id", "name", "mode", "timezone"]
 LINE_HEADER = ["id", "name", "operator_id", "colour"]
 STATION_HEADER = ["reader_id", "stop_name", "operator_id", "line_ids"]
 
@@ -53,13 +53,13 @@ def write_csv(path: Path, header, rows) -> int:
 
 
 def export(conn, out_dir: Path) -> dict:
-    """Write operators.csv and stations.csv; return counts and skipped rows."""
+    """Write operators.csv, lines.csv and stations.csv; return counts and skipped rows."""
     out_dir.mkdir(parents=True, exist_ok=True)
 
     operators = conn.execute("SELECT * FROM operators ORDER BY rowid").fetchall()
     n_operators = write_csv(
         out_dir / "operators.csv", OPERATOR_HEADER,
-        ((f"0x{o['id']}", o["name"], o["mode"]) for o in operators),
+        ((f"0x{o['id']}", o["name"], o["mode"], o["timezone"]) for o in operators),
     )
 
     lines = conn.execute(

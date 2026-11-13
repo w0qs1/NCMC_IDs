@@ -3,7 +3,7 @@
 Everything that more than one script needs lives here:
   * ID parsing / normalisation (operator = acquirer + operator, reader)
   * reader-ID wildcard patterns such as 126???
-  * operator modes (BUS, METRO, ...)
+  * operator modes (BUS, METRO, ...) and time zones (IST, UTC)
   * transaction timestamps (effective date + minutes elapsed)
   * SQLite access for operators and stations
 """
@@ -21,7 +21,7 @@ DATA_DIR = ROOT / "data"
 DEFAULT_DB = DATA_DIR / "ncmc.db"
 SCHEMA_FILE = DATA_DIR / "schema.sql"
 DEFAULT_EXPORT_DIR = ROOT / "export"
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 COLOUR_NIBBLES = 6                                     # RGB, 3 bytes: RRGGBB
 
 ACQUIRER_NIBBLES = 2                                   # 1 byte  (JSON: acquirerId)
@@ -37,6 +37,10 @@ MODES = (
     "VENDING_MACHINE", "POS", "OTHER", "TROLLEYBUS", "TOLL_ROAD",
     "MONORAIL", "CABLECAR", "PARKING",
 )
+
+# Operator time zones (must match the CHECK constraint in data/schema.sql).
+TIMEZONES = ("IST", "UTC")
+DEFAULT_TIMEZONE = "IST"      # used when a CSV / caller does not give one
 
 
 # ---------------------------------------------------------------------------
@@ -149,6 +153,22 @@ def normalize_mode(text) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
+# Time zones
+# ---------------------------------------------------------------------------
+
+def normalize_timezone(text) -> Optional[str]:
+    """'ist' / ' Utc ' / '1' -> 'IST' / 'UTC' / 'IST'.  None if not valid."""
+    if text is None:
+        return None
+    value = str(text).strip().upper()
+    if value in TIMEZONES:
+        return value
+    if value.isdigit() and 1 <= int(value) <= len(TIMEZONES):
+        return TIMEZONES[int(value) - 1]
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Line colours
 # ---------------------------------------------------------------------------
 
@@ -227,7 +247,7 @@ def connect(path=DEFAULT_DB, must_exist: bool = True,
         if version != SCHEMA_VERSION:
             conn.close()
             hint = ("Upgrade it in place with:  python scripts/ncmc_db.py migrate"
-                    if version == SCHEMA_VERSION - 1 else
+                    if version in (2, SCHEMA_VERSION - 1) else
                     "Rebuild it with 'init' + 'import-csv'.")
             raise SystemExit(
                 f"{path} uses schema version {version}, but these scripts need "
@@ -310,19 +330,32 @@ ORDER BY o.rowid, l.id;
 """
 
 
-def migrate(conn: sqlite3.Connection) -> bool:
-    """Upgrade a version-2 database to the current schema.
+# The v3 -> v4 change: operators.timezone.  SQLite cannot add a NOT NULL column
+# without a default, so existing operators get DEFAULT_TIMEZONE; new rows are
+# always written with an explicit value by add_operator().
+# Must stay identical to MIGRATION_V4_SQL in migrate_db.py.
+TIMEZONE_SCHEMA = f"""
+ALTER TABLE operators ADD COLUMN timezone TEXT NOT NULL DEFAULT '{DEFAULT_TIMEZONE}'
+    CHECK (timezone IN ({", ".join("'" + t + "'" for t in TIMEZONES)}));
+"""
 
-    Returns False if it was already current.  Existing data is untouched.
+
+def migrate(conn: sqlite3.Connection) -> bool:
+    """Upgrade a version-2 or version-3 database to the current schema.
+
+    Returns False if it was already current.  Existing data is untouched
+    (existing operators get the default time zone, IST).
     """
     version = conn.execute("PRAGMA user_version").fetchone()[0]
     if version == SCHEMA_VERSION:
         return False
-    if version != SCHEMA_VERSION - 1:
+    if version not in (2, 3):
         raise SystemExit(f"Cannot migrate from schema version {version}.")
-    conn.executescript(
-        "BEGIN;" + LINES_SCHEMA + f"PRAGMA user_version = {SCHEMA_VERSION};COMMIT;"
-    )
+    script = "BEGIN;"
+    if version == 2:
+        script += LINES_SCHEMA
+    script += TIMEZONE_SCHEMA + f"PRAGMA user_version = {SCHEMA_VERSION};COMMIT;"
+    conn.executescript(script)
     return True
 
 
@@ -330,16 +363,21 @@ def get_operator(conn, operator_id: str) -> Optional[sqlite3.Row]:
     return conn.execute("SELECT * FROM operators WHERE id = ?", (operator_id,)).fetchone()
 
 
-def add_operator(conn, operator_id: str, name: str, mode: str) -> None:
-    """Insert an operator.  Raises ValueError for a bad name or mode."""
+def add_operator(conn, operator_id: str, name: str, mode: str,
+                 timezone: str = DEFAULT_TIMEZONE) -> None:
+    """Insert an operator.  Raises ValueError for a bad name, mode or time zone."""
     clean_mode = normalize_mode(mode)
     if clean_mode is None:
         raise ValueError(f"Invalid mode {mode!r}. Choose one of: {', '.join(MODES)}")
+    clean_tz = normalize_timezone(timezone)
+    if clean_tz is None:
+        raise ValueError(
+            f"Invalid timezone {timezone!r}. Choose one of: {', '.join(TIMEZONES)}")
     if not name or not name.strip():
         raise ValueError("Operator name must not be empty")
     conn.execute(
-        "INSERT INTO operators (id, name, mode) VALUES (?, ?, ?)",
-        (operator_id, name.strip(), clean_mode),
+        "INSERT INTO operators (id, name, mode, timezone) VALUES (?, ?, ?, ?)",
+        (operator_id, name.strip(), clean_mode, clean_tz),
     )
 
 

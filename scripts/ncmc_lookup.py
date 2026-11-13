@@ -8,10 +8,11 @@ Steps
      date is the epoch and each transaction's minutesElapsed is added to it.
   3. Look every operator and reader ID up in data/ncmc.db (wildcard patterns
      such as 323??? are honoured; the most specific match wins).
-  4. For anything unknown, ask for an operator name and mode (BUS, METRO, ...)
-     or a station name, propose a wildcard pattern for the reader ID, ask
-     which line(s) the stop is on (several = interchange; a new line asks for
-     its RGB hex colour), and save on confirmation.
+  4. For anything unknown, ask for an operator name, mode (BUS, METRO, ...)
+     and time zone (IST or UTC), or a station name, propose a wildcard
+     pattern for the reader ID, ask which line(s) the stop is on (several =
+     interchange; a new line asks for its RGB hex colour), and save on
+     confirmation.
 
 An operator ID is the acquirer ID (1 byte) followed by the operator ID
 (2 bytes): acquirerId 0x0B + operatorId 0x177D -> 0x0B177D.
@@ -20,7 +21,7 @@ Usage:
   python scripts/ncmc_lookup.py dump.json
   python scripts/ncmc_lookup.py dump.json --no-prompt    # report only, never writes
 
-Only operator IDs, reader IDs, modes and the names you type are written to
+Only operator IDs, reader IDs, modes, time zones and the names you type are written to
 the database.  Timestamps, amounts and balances are shown on screen but are
 never stored.
 """
@@ -37,9 +38,10 @@ from typing import Optional
 
 from ncmc_common import (
     ACQUIRER_NIBBLES, DEFAULT_DB, MODES, OPERATOR_NIBBLES, READER_NIBBLES,
-    add_line, add_operator, add_station, connect, find_line, find_overlaps,
+    TIMEZONES, add_line, add_operator, add_station, connect, find_line, find_overlaps,
     fmt_hex, fmt_time, get_operator, join_operator_id, link_station_line,
     lookup_station, normalize_colour, normalize_mode, normalize_pattern,
+    normalize_timezone,
     operator_lines, parse_effective_date, pattern_matches, specificity,
     split_operator_id, station_lines, suggest_pattern, to_hex, transaction_time,
 )
@@ -252,7 +254,7 @@ class Seen:
 
 @dataclass
 class Report:
-    new_operators: list = field(default_factory=list)    # (id, name, mode)
+    new_operators: list = field(default_factory=list)    # (id, name, mode, timezone)
     new_stations: list = field(default_factory=list)     # (operator name, pattern, name, lines)
     new_lines: list = field(default_factory=list)        # (operator name, line name, colour)
     named_stations: list = field(default_factory=list)   # (operator name, pattern, name)
@@ -304,8 +306,21 @@ def ask_mode(prompter) -> str:
         print(f"  Enter a number 1-{len(MODES)} or one of the names above.")
 
 
+def ask_timezone(prompter) -> str:
+    """Show the time-zone menu and keep asking until a valid one is chosen."""
+    print("  Time zone:")
+    for i, tz in enumerate(TIMEZONES, start=1):
+        print(f"    {i}. {tz}")
+    while True:
+        answer = prompter.ask("  Select time zone (number or name): ")
+        timezone = normalize_timezone(answer)
+        if timezone is not None:
+            return timezone
+        print(f"  Enter a number 1-{len(TIMEZONES)} or one of the names above.")
+
+
 def ask_operator(conn, prompter, operator_id, occurrences) -> Optional[tuple]:
-    """Prompt for a new operator.  Returns (name, mode), or None to skip."""
+    """Prompt for a new operator.  Returns (name, mode, timezone), or None to skip."""
     acquirer, operator = split_operator_id(operator_id)
     print(f"\nUnknown operator: {fmt_hex(operator_id)} "
           f"(acquirer 0x{acquirer}, operator 0x{operator})")
@@ -314,8 +329,9 @@ def ask_operator(conn, prompter, operator_id, occurrences) -> Optional[tuple]:
     if not name:
         return None
     mode = ask_mode(prompter)
-    add_operator(conn, operator_id, name, mode)
-    return name, mode
+    timezone = ask_timezone(prompter)
+    add_operator(conn, operator_id, name, mode, timezone)
+    return name, mode, timezone
 
 
 def ask_pattern(conn, prompter, operator_id, reader,
@@ -411,8 +427,8 @@ def discover(conn, dump: SafeDump, prompter: Optional[Prompter]) -> Report:
                 declined_operators.add(operator_id)
                 report.unresolved.append((operator_id, reader, "operator skipped"))
                 continue
-            name, mode = answer
-            report.new_operators.append((operator_id, name, mode))
+            name, mode, timezone = answer
+            report.new_operators.append((operator_id, name, mode, timezone))
             op_row = get_operator(conn, operator_id)
 
         # --- station -----------------------------------------------------
@@ -481,7 +497,7 @@ def print_summary(report: Report, prompted: bool) -> None:
             print("  - " + render(item))
 
     section("New operators", report.new_operators,
-            lambda i: f"{i[1]} [{i[2]}] ({fmt_hex(i[0])})")
+            lambda i: f"{i[1]} [{i[2]}, {i[3]}] ({fmt_hex(i[0])})")
     section("New lines", report.new_lines,
             lambda i: f"{i[0]}: {i[1]} ({'#' + i[2] if i[2] else 'no colour'})")
     section("New stations", report.new_stations,

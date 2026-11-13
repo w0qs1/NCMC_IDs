@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""Upgrade an NCMC database from schema version 2 to 3 (adds lines).
+"""Upgrade an NCMC database to schema version 4.
 
-Adds the `lines` and `station_lines` tables, the same-operator trigger and
-the `v_lines` view, and rebuilds `v_stations` with a `lines` column.
-Existing operators and stations are not touched.
+  version 2 -> 4   adds `lines`, `station_lines`, the same-operator trigger,
+                   the `v_lines` view and a `lines` column in `v_stations`,
+                   then adds `operators.timezone`
+  version 3 -> 4   adds `operators.timezone` only
+
+Every existing operator gets the time zone IST (change it afterwards with
+  python scripts/ncmc_db.py edit-operator OPERATOR --timezone UTC).
+Existing operators and stations are otherwise not touched.
 
 Stand-alone: needs only the Python standard library.
 
@@ -13,8 +18,9 @@ Usage:
   python scripts/migrate_db.py --dry-run            # check only, change nothing
   python scripts/migrate_db.py --no-backup          # skip the .bak copy
 
-A backup copy (ncmc.db.v2.bak) is written next to the database first.
-The upgrade runs in one transaction: it either completes or changes nothing.
+A backup copy (ncmc.db.v<old>.bak, e.g. ncmc.db.v3.bak) is written next to
+the database first.  The upgrade runs in one transaction: it either completes
+or changes nothing.
 """
 
 from __future__ import annotations
@@ -25,11 +31,12 @@ import sqlite3
 import sys
 from pathlib import Path
 
-FROM_VERSION, TO_VERSION = 2, 3
+TO_VERSION = 4
+FROM_VERSIONS = (2, 3)
 DEFAULT_DB = Path(__file__).resolve().parent.parent / "data" / "ncmc.db"
 
-# Keep identical to the lines section of data/schema.sql.
-MIGRATION_SQL = """
+# v2 -> v3.  Keep identical to the lines section of data/schema.sql.
+MIGRATION_V3_SQL = """
 CREATE TABLE lines (
     id          INTEGER PRIMARY KEY,
     operator_id TEXT NOT NULL,
@@ -96,6 +103,14 @@ JOIN operators o ON o.id = l.operator_id
 ORDER BY o.rowid, l.id;
 """
 
+# v3 -> v4.  SQLite cannot add a NOT NULL column without a default, so the
+# column carries DEFAULT 'IST' in upgraded databases (existing rows become IST).
+# Keep identical to TIMEZONE_SCHEMA in ncmc_common.py.
+MIGRATION_V4_SQL = """
+ALTER TABLE operators ADD COLUMN timezone TEXT NOT NULL DEFAULT 'IST'
+    CHECK (timezone IN ('IST', 'UTC'));
+"""
+
 
 def counts(conn) -> tuple[int, int]:
     return (conn.execute("SELECT COUNT(*) FROM operators").fetchone()[0],
@@ -109,7 +124,7 @@ def main(argv=None) -> int:
     parser.add_argument("--dry-run", action="store_true",
                         help="check the database and report; change nothing")
     parser.add_argument("--no-backup", action="store_true",
-                        help="do not write a .v2.bak copy first")
+                        help="do not write a .v<old>.bak copy first")
     args = parser.parse_args(argv)
 
     path = Path(args.db)
@@ -123,9 +138,9 @@ def main(argv=None) -> int:
         if version == TO_VERSION:
             print(f"{path} is already at schema version {TO_VERSION}; nothing to do.")
             return 0
-        if version != FROM_VERSION:
+        if version not in FROM_VERSIONS:
             print(f"{path} is at schema version {version}; this tool only upgrades "
-                  f"version {FROM_VERSION}.", file=sys.stderr)
+                  f"versions {', '.join(map(str, FROM_VERSIONS))}.", file=sys.stderr)
             return 1
         tables = {r[0] for r in conn.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table'")}
@@ -133,10 +148,15 @@ def main(argv=None) -> int:
             print("This does not look like an NCMC database (no operators/stations "
                   "table).", file=sys.stderr)
             return 1
-        if tables & {"lines", "station_lines"}:
+        if version == 2 and tables & {"lines", "station_lines"}:
             print("A 'lines' or 'station_lines' table already exists but the version "
                   "is 2; refusing to guess.  Inspect the database by hand.",
                   file=sys.stderr)
+            return 1
+        operator_columns = {r[1] for r in conn.execute("PRAGMA table_info(operators)")}
+        if "timezone" in operator_columns:
+            print(f"operators.timezone already exists but the version is {version}; "
+                  "refusing to guess.  Inspect the database by hand.", file=sys.stderr)
             return 1
         problems = conn.execute("PRAGMA integrity_check").fetchone()[0]
         if problems != "ok":
@@ -150,7 +170,7 @@ def main(argv=None) -> int:
             return 0
 
         if not args.no_backup:
-            backup = path.with_name(path.name + ".v2.bak")
+            backup = path.with_name(f"{path.name}.v{version}.bak")
             if backup.exists():
                 print(f"Backup {backup} already exists; move it away or use --no-backup.",
                       file=sys.stderr)
@@ -158,17 +178,23 @@ def main(argv=None) -> int:
             shutil.copy2(path, backup)
             print(f"Backup written: {backup}")
 
+        script = "BEGIN;"
+        if version == 2:
+            script += MIGRATION_V3_SQL
+        script += MIGRATION_V4_SQL + f"PRAGMA user_version = {TO_VERSION};COMMIT;"
         conn.execute("PRAGMA foreign_keys = ON")
-        conn.executescript(
-            "BEGIN;" + MIGRATION_SQL + f"PRAGMA user_version = {TO_VERSION};COMMIT;")
+        conn.executescript(script)
 
         after = counts(conn)
         if after != before or conn.execute("PRAGMA foreign_key_check").fetchall():
             print("Verification failed - restore the backup.", file=sys.stderr)
             return 1
-        print(f"Upgraded to version {TO_VERSION}: lines and station_lines added; "
+        added = "lines, station_lines and operators.timezone" if version == 2 \
+            else "operators.timezone"
+        print(f"Upgraded to version {TO_VERSION}: {added} added; "
               f"{after[0]} operator(s) and {after[1]} station row(s) unchanged.")
-        print("Next: add lines with  python scripts/ncmc_db.py add-line OPERATOR NAME -C '#RRGGBB'")
+        print("All existing operators were set to IST. Fix any that differ with:\n"
+              "  python scripts/ncmc_db.py edit-operator OPERATOR --timezone UTC")
         return 0
     except sqlite3.Error as error:
         try:

@@ -7,11 +7,11 @@ Examples
   python scripts/ncmc_db.py import-csv some_dir/        # operators.csv + stations.csv
   python scripts/ncmc_db.py operators
   python scripts/ncmc_db.py stations "Chennai Metro"
-  python scripts/ncmc_db.py add-operator 0x0B177D "Chennai Metro" METRO
+  python scripts/ncmc_db.py add-operator 0x0B177D "Chennai Metro" METRO IST
   python scripts/ncmc_db.py add-station 0x0B177D 0x001??? "Airport"
   python scripts/ncmc_db.py add-station 0x0B177D - "Mannadi" -c "?"   # ID unknown
   python scripts/ncmc_db.py edit-station 12 --name "Alandur" --reader-id 0x004???
-  python scripts/ncmc_db.py edit-operator hyderabad --mode METRO
+  python scripts/ncmc_db.py edit-operator hyderabad --mode METRO --timezone IST
   python scripts/ncmc_db.py find hyderabad 0x323149
   python scripts/ncmc_db.py check
 
@@ -23,7 +23,7 @@ Lines and colours (colour = RGB hex, with or without '#'; '-' clears it):
   python scripts/ncmc_db.py add-station 0x0B177D 0x001??? "Airport" -l Blue
   python scripts/ncmc_db.py add-station 0x0B177D 0x002??? "Alandur" -l Blue -l Green
   python scripts/ncmc_db.py edit-station 12 -l Green --remove-line Blue
-  python scripts/ncmc_db.py migrate                     # upgrade a v2 database
+  python scripts/ncmc_db.py migrate                     # upgrade a v2/v3 database
 
 An OPERATOR argument is the 6-digit operator ID (0x0B177D), or part of the
 operator's name (case-insensitive).  '?' in a reader ID matches any digit.
@@ -42,12 +42,12 @@ import sys
 from pathlib import Path
 
 from ncmc_common import (
-    ACQUIRER_NIBBLES, DEFAULT_DB, MODES, OPERATOR_ID_NIBBLES, OPERATOR_NIBBLES,
-    READER_NIBBLES, add_line, add_operator, add_station, connect, find_line,
+    ACQUIRER_NIBBLES, DEFAULT_DB, DEFAULT_TIMEZONE, MODES, OPERATOR_ID_NIBBLES,
+    OPERATOR_NIBBLES, READER_NIBBLES, TIMEZONES, add_line, add_operator, add_station, connect, find_line,
     find_overlaps, fmt_colour, fmt_hex, format_lines, get_line, get_operator,
     init_schema, join_operator_id, link_station_line, lookup_station, migrate,
-    normalize_colour, normalize_mode, normalize_pattern, parse_int,
-    patterns_overlap, specificity, station_lines, to_hex, unlink_station_line,
+    normalize_colour, normalize_mode, normalize_pattern, normalize_timezone,
+    parse_int, patterns_overlap, specificity, station_lines, to_hex, unlink_station_line,
 )
 
 OPERATOR_ID_RE = re.compile(r"^(?:0x)?([0-9a-f]{%d})$" % OPERATOR_ID_NIBBLES, re.I)
@@ -119,6 +119,14 @@ def parse_mode_arg(text: str) -> str:
     return mode
 
 
+def parse_timezone_arg(text: str) -> str:
+    timezone = normalize_timezone(text)
+    if timezone is None:
+        raise SystemExit(
+            f"Invalid timezone {text!r}. Choose one of: {', '.join(TIMEZONES)}")
+    return timezone
+
+
 def parse_colour_arg(text: str):
     """RGB hex -> 'RRGGBB'; '-' means 'no colour' (stored as NULL)."""
     if text.strip() == "-":
@@ -164,12 +172,14 @@ def read_csv_rows(path: Path):
 
 
 def import_csv(conn, directory: Path) -> dict:
-    """Load operators.csv (id,name,mode), the optional lines.csv
+    """Load operators.csv (id,name,mode[,timezone]), the optional lines.csv
     (id,name,operator_id,colour) and stations.csv
     (reader_id,stop_name,operator_id[,line_ids]) from ``directory``.
 
     Line ids in lines.csv are decimal and are kept as given; stations.csv
     refers to them in ``line_ids``, separated by ';' (e.g. "1;3").
+    An operators.csv without a ``timezone`` column (or with an empty cell)
+    gets the default time zone, IST.
     """
     operators_csv = directory / "operators.csv"
     lines_csv = directory / "lines.csv"
@@ -187,7 +197,8 @@ def import_csv(conn, directory: Path) -> dict:
             warn(f"operators.csv line {line}: invalid id {row.get('id')!r} - skipped")
             continue
         try:
-            add_operator(conn, operator_id, row.get("name", ""), row.get("mode", ""))
+            add_operator(conn, operator_id, row.get("name", ""), row.get("mode", ""),
+                         row.get("timezone") or DEFAULT_TIMEZONE)
         except (sqlite3.IntegrityError, ValueError) as error:
             warn(f"operators.csv line {line}: {fmt_hex(operator_id)} not imported ({error})")
             continue
@@ -279,7 +290,8 @@ def cmd_import_csv(args):
 def cmd_migrate(args):
     conn = connect(args.db, check_version=False)
     if migrate(conn):
-        print(f"Upgraded {args.db} to schema version 3 (lines and station_lines added).")
+        print(f"Upgraded {args.db} to the current schema version "
+              "(operators.timezone added; existing operators set to IST).")
     else:
         print(f"{args.db} is already up to date.")
 
@@ -291,9 +303,10 @@ def cmd_operators(args):
         "(SELECT COUNT(*) FROM lines l WHERE l.operator_id = o.id) AS nl "
         "FROM operators o ORDER BY o.rowid"
     ).fetchall()
-    print(f"{'ID':<10}{'Mode':<17}{'Stations':>8}{'Lines':>7}  Name")
+    print(f"{'ID':<10}{'Mode':<17}{'TZ':<5}{'Stations':>8}{'Lines':>7}  Name")
     for r in rows:
-        print(f"0x{r['id']:<8}{r['mode']:<17}{r['n']:>8}{r['nl']:>7}  {r['name']}")
+        print(f"0x{r['id']:<8}{r['mode']:<17}{r['timezone']:<5}"
+              f"{r['n']:>8}{r['nl']:>7}  {r['name']}")
 
 
 def cmd_stations(args):
@@ -301,7 +314,7 @@ def cmd_stations(args):
     ops = ([resolve_operator(conn, args.operator)] if args.operator
            else conn.execute("SELECT * FROM operators ORDER BY rowid").fetchall())
     for op in ops:
-        print(f"\n{op['name']}  ({fmt_hex(op['id'])}, {op['mode']})")
+        print(f"\n{op['name']}  ({fmt_hex(op['id'])}, {op['mode']}, {op['timezone']})")
         rows = conn.execute(
             "SELECT * FROM stations WHERE operator_id = ? ORDER BY id", (op["id"],)
         ).fetchall()
@@ -320,7 +333,7 @@ def cmd_lines(args):
     ops = ([resolve_operator(conn, args.operator)] if args.operator
            else conn.execute("SELECT * FROM operators ORDER BY rowid").fetchall())
     for op in ops:
-        print(f"\n{op['name']}  ({fmt_hex(op['id'])}, {op['mode']})")
+        print(f"\n{op['name']}  ({fmt_hex(op['id'])}, {op['mode']}, {op['timezone']})")
         rows = conn.execute(
             "SELECT l.*, (SELECT COUNT(*) FROM station_lines sl WHERE sl.line_id = l.id) AS n "
             "FROM lines l WHERE l.operator_id = ? ORDER BY l.id", (op["id"],)
@@ -386,12 +399,13 @@ def cmd_add_operator(args):
                          "operator (2 bytes), e.g. 0x0B177D.")
     try:
         with conn:
-            add_operator(conn, operator_id, args.name, args.mode)
+            add_operator(conn, operator_id, args.name, args.mode, args.timezone)
     except sqlite3.IntegrityError:
         raise SystemExit(f"Operator {fmt_hex(operator_id)} already exists.")
     except ValueError as error:
         raise SystemExit(str(error))
-    print(f"Added {args.name} ({fmt_hex(operator_id)}, {normalize_mode(args.mode)})")
+    print(f"Added {args.name} ({fmt_hex(operator_id)}, {normalize_mode(args.mode)}, "
+          f"{normalize_timezone(args.timezone)})")
 
 
 def cmd_edit_operator(args):
@@ -399,12 +413,14 @@ def cmd_edit_operator(args):
     op = resolve_operator(conn, args.operator)
     name = op["name"] if args.name is None else args.name.strip()
     mode = op["mode"] if args.mode is None else parse_mode_arg(args.mode)
+    timezone = (op["timezone"] if args.timezone is None
+                else parse_timezone_arg(args.timezone))
     if not name:
         raise SystemExit("Operator name must not be empty.")
     with conn:
-        conn.execute("UPDATE operators SET name = ?, mode = ? WHERE id = ?",
-                     (name, mode, op["id"]))
-    print(f"Updated {fmt_hex(op['id'])}: {name} ({mode})")
+        conn.execute("UPDATE operators SET name = ?, mode = ?, timezone = ? WHERE id = ?",
+                     (name, mode, timezone, op["id"]))
+    print(f"Updated {fmt_hex(op['id'])}: {name} ({mode}, {timezone})")
 
 
 def cmd_add_station(args):
@@ -535,6 +551,7 @@ def build_parser():
     parser.add_argument("--db", default=str(DEFAULT_DB), help="database file (default: data/ncmc.db)")
     sub = parser.add_subparsers(dest="command", required=True)
     modes = ", ".join(MODES)
+    timezones = ", ".join(TIMEZONES)
 
     p = sub.add_parser("init", help="create an empty database")
     p.add_argument("--force", action="store_true", help="overwrite an existing database")
@@ -544,7 +561,7 @@ def build_parser():
     p.add_argument("directory")
     p.set_defaults(func=cmd_import_csv)
 
-    p = sub.add_parser("migrate", help="upgrade a version-2 database to add lines")
+    p = sub.add_parser("migrate", help="upgrade a version-2/3 database (adds lines and operators.timezone)")
     p.set_defaults(func=cmd_migrate)
 
     p = sub.add_parser("operators", help="list operators")
@@ -578,12 +595,15 @@ def build_parser():
     p.add_argument("id", help="6 hex digits: acquirer (1 byte) + operator (2 bytes), e.g. 0x0B177D")
     p.add_argument("name")
     p.add_argument("mode", help=f"one of: {modes}")
+    p.add_argument("timezone", nargs="?", default=DEFAULT_TIMEZONE,
+                   help=f"one of: {timezones} (default: {DEFAULT_TIMEZONE})")
     p.set_defaults(func=cmd_add_operator)
 
-    p = sub.add_parser("edit-operator", help="change an operator's name or mode")
+    p = sub.add_parser("edit-operator", help="change an operator's name, mode or timezone")
     p.add_argument("operator", help="0x0B177D or part of the name")
     p.add_argument("--name")
     p.add_argument("--mode", help=f"one of: {modes}")
+    p.add_argument("--timezone", help=f"one of: {timezones}")
     p.set_defaults(func=cmd_edit_operator)
 
     p = sub.add_parser("add-station", help="add a station / reader-ID pattern")

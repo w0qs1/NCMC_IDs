@@ -1,6 +1,6 @@
-id,name,mode
-0x0B177D,Chennai Metro,METRO
-0x043630,Hyderabad Metro,METRO
-0x010001,MTC Chennai,BUS
-0x020001,Bengaluru Metro,METRO
-0x050000,BMTC Bengaluru,BUS
+id,name,mode,timezone
+0x0B177D,Chennai Metro,METRO,IST
+0x043630,Hyderabad Metro,METRO,IST
+0x010001,MTC Chennai,BUS,UTC
+0x020001,Bengaluru Metro,METRO,IST
+0x050000,BMTC Bengaluru,BUS,IST

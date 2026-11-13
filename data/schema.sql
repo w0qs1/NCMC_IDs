@@ -1,4 +1,4 @@
--- NCMC operator / station ID database  (schema version 3)
+-- NCMC operator / station ID database  (schema version 4)
 -- ---------------------------------------------------------------------------
 -- Hierarchy:
 --
@@ -18,20 +18,21 @@
 --   stations.reader_id 6 hex digits (3 bytes), '?' = any digit
 --                      e.g. 001140 (exact) or 126??? (any gate of station 126)
 --   lines.colour       6 hex digits RRGGBB (RGB), e.g. 0072BC; NULL = unknown
+--   operators.timezone 'IST' or 'UTC'
 --
 -- When several patterns match a reader ID, the one with the fewest '?' wins
 -- (an exact ID overrides a mask).
 --
 -- The CSV files for Metrodroid are generated from these tables:
---   operators.csv   id,name,mode
+--   operators.csv   id,name,mode,timezone
 --   lines.csv       id,name,operator_id,colour           (colour as #RRGGBB)
 --   stations.csv    reader_id,stop_name,operator_id,line_ids
 --                   (line_ids = ids from lines.csv, separated by ';')
 -- The `comments` column is for maintainers only and is not exported.
 --
--- Upgrading a version-2 database: python scripts/ncmc_db.py migrate
--- (applies the "lines" section below; keep it in sync with LINES_SCHEMA in
--- ncmc_common.py).
+-- Upgrading a version-2 or version-3 database: python scripts/ncmc_db.py migrate
+-- (or scripts/migrate_db.py).  Keep the "lines" section below in sync with
+-- LINES_SCHEMA in ncmc_common.py, and operators.timezone with TIMEZONE_SCHEMA.
 -- ---------------------------------------------------------------------------
 
 PRAGMA foreign_keys = ON;
@@ -43,7 +44,9 @@ CREATE TABLE operators (
     mode  TEXT NOT NULL
           CHECK (mode IN ('BUS', 'TRAIN', 'TRAM', 'METRO', 'FERRY',
                           'TICKET_MACHINE', 'POS', 'OTHER', 'TOLL_ROAD',
-                          'MONORAIL', 'CABLECAR', 'PARKING', 'HSR'))
+                          'MONORAIL', 'CABLECAR', 'PARKING', 'HSR')),
+    timezone TEXT NOT NULL
+          CHECK (timezone IN ('IST', 'UTC'))
 );
 
 CREATE TABLE stations (
@@ -138,4 +141,4 @@ FROM lines l
 JOIN operators o ON o.id = l.operator_id
 ORDER BY o.rowid, l.id;
 
-PRAGMA user_version = 3;
+PRAGMA user_version = 4;

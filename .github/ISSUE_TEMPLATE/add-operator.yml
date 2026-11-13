@@ -47,6 +47,16 @@ body:
     validations:
       required: true
   - type: dropdown
+    id: timezone
+    attirbutes:
+      label: timezone
+      description: Provide the timezone used by the operator (UTC or IST). Select UTC if time shown on the app is 5hrs 30mins earlier than actual time of transaction.
+      options:
+        - IST (default)
+        - UTC (if time shown is not correct)
+    validations:
+      required: true
+  - type: dropdown
     id: evidence
     attributes:
       label: How was the operator ID obtained?

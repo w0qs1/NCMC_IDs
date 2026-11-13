@@ -58,10 +58,10 @@ This repository is an independent, community-driven effort and does not represen
 │   ├── ncmc_db.py           # manage the database (add / edit / list / find / check)
 │   ├── ncmc_lookup.py       # process a Metrodroid JSON dump and add new IDs
 │   ├── export_csv.py        # database -> the three CSV files for Metrodroid
-│   ├── migrate_db.py        # upgrade an older (version 2) database to add lines
+│   ├── migrate_db.py        # upgrade an older (version 2 or 3) database to the current version
 │   └── ncmc_common.py       # shared helpers
 ├── export/                  # GENERATED - do not edit by hand
-│   ├── operators.csv        # id,name,mode
+│   ├── operators.csv        # id,name,mode,timezone
 │   ├── lines.csv            # id,name,operator_id,colour
 │   └── stations.csv         # reader_id,stop_name,operator_id,line_ids
 └── tests/
@@ -79,7 +79,7 @@ operators                  lines                          stations
 id    6 hex digits ◄────── operator_id (foreign key)      operator_id  (foreign key) ──► operators
 name                       name    e.g. Blue Line         reader_id    6 hex digits, ? = any digit
 mode  BUS, METRO, ...      colour  RRGGBB hex, or NULL                 (or NULL if not decoded yet)
-                                  ▲                       stop_name
+timezone  IST or UTC              ▲                       stop_name
                                   │                       comments     (maintainer notes, not exported)
                                   │    station_lines             ▲
                                   └─── line_id    station_id ────┘      one row per (station, line)
@@ -87,6 +87,7 @@ mode  BUS, METRO, ...      colour  RRGGBB hex, or NULL                 (or NULL 
 
 - **`operators`** is the master list. `id` is the primary key, so an operator can exist only once. It is the acquirer ID (1 byte) followed by the operator ID (2 bytes): acquirer `0x0B` + operator `0x177D` = `0x0B177D`.
 - **`mode`** is one of `BUS, TRAIN, TRAM, METRO, FERRY, TICKET_MACHINE, POS, OTHER, TOLL_ROAD, MONORAIL, CABLECAR, PARKING, HSR`.
+- **`timezone`** is the time zone in which the operator's readers write transaction timestamps: `IST` or `UTC`. It is required and defaults to `IST`. See [Operator Time Zone](#operator-time-zone).
 - **`stations`** holds every stop / reader-ID pattern, each belonging to exactly one operator. There is one shared table rather than one table per operator, so adding an operator never requires changing the schema; the list for an operator is what you get by filtering on its `id`.
 - **`reader_id`** is the 3-byte reader (terminal) ID. A `?` matches any hex digit, so `0x126???` covers every gate of station `126`. When several patterns of an operator match, the one with the fewest `?` wins.
 - IDs are stored as uppercase hex text without `0x`, which keeps them readable in any SQLite browser. The database rejects malformed IDs, unknown modes, duplicate patterns within an operator, and stations that point at a non-existent operator.
@@ -96,14 +97,44 @@ mode  BUS, METRO, ...      colour  RRGGBB hex, or NULL                 (or NULL 
 - A `NULL` reader ID means the station is known but its ID has not been decoded. An empty `stop_name` means the ID has been seen but not yet named. Neither can be used by Metrodroid, so they are kept in the database but left out of the export.
 - The read-only views `v_stations` (with a `lines` column such as `Blue Line #0072BC, Green Line #00A651`) and `v_lines` join the tables for easy browsing.
 
-The schema is versioned (`PRAGMA user_version`); the current version is 3 (version 3 added lines). If a script reports that your database uses schema version 2, upgrade it in place:
+The schema is versioned (`PRAGMA user_version`); the current version is 4 (version 3 added lines, version 4 added `operators.timezone`). If a script reports that your database uses schema version 2 or 3, upgrade it in place:
 
 ```bash
 python scripts/migrate_db.py --dry-run   # check only
-python scripts/migrate_db.py             # backs up to ncmc.db.v2.bak, then upgrades
+python scripts/migrate_db.py             # backs up to ncmc.db.v<old>.bak (e.g. ncmc.db.v3.bak), then upgrades
 ```
 
-Existing operators and stations are not changed; add lines afterwards (see below). For any other version, use the `data/ncmc.db` shipped with the scripts, or rebuild one with `init` and `import-csv`.
+Existing operators and stations are not changed, except that **every existing operator is set to `IST`**. Fix any operator that uses UTC afterwards (for example MTC Chennai):
+
+```bash
+python scripts/ncmc_db.py edit-operator "MTC Chennai" --timezone UTC
+```
+
+Add lines afterwards if needed (see below). For any other version, use the `data/ncmc.db` shipped with the scripts, or rebuild one with `init` and `import-csv`.
+
+## Operator Time Zone
+
+Every NCMC transaction stores its time as the card's effective date plus a count of minutes elapsed. That value is a wall-clock time, and the clock it was written with depends on the operator:
+
+- Most operators write it in **IST** (Indian Standard Time, UTC+05:30). The time can be shown as it is.
+- Some operators, such as **MTC Chennai**, write it in **UTC**. Shown as it is, the time appears 5 hours 30 minutes earlier than the real time of the transaction.
+
+The `timezone` field of each operator records which of the two applies (`IST` or `UTC`). An app reading `operators.csv` uses it for **each and every transaction**, looking up the operator of that transaction (not just the operator of the card's first or last transaction) and then:
+
+| `timezone` | What the app does before showing the time in IST |
+|---|---|
+| `IST` | Nothing: the stored time is already IST. |
+| `UTC` | Adds 5 hours 30 minutes. |
+
+This applies to the entry record of a tap-out as well, using the operator of the entry record. A trip that starts on one operator and ends on another can therefore need different corrections for its two times.
+
+How to choose a value:
+
+- Use `IST` unless you have evidence otherwise. It is the default.
+- Use `UTC` when the time shown by the app for a transaction is 5 hours 30 minutes earlier than the actual time you made it.
+- Check at least one transaction with a known real time before reporting `UTC`; do not guess from the operator's name or region.
+
+No other time zones are supported. If you find an operator that needs a different offset, open an **Other issue**.
 
 ## Only Open Stations and Lines
 
@@ -133,18 +164,20 @@ python scripts/export_csv.py
 1. **Filters personal data.** Only an allowlist of fields is read: the effective date and, per transaction, the acquirer/operator/reader IDs, minutes elapsed, sequence, amount, status and RFU. The card number, serial/UID, holder name, balance and any unrecognised field are ignored. Their names (never values) are listed so you can see what was dropped. The allowlist is at the top of the script.
 2. **Shows the history with real times.** The card's effective date is the epoch and each transaction's `minutesElapsed` is added to it, giving a date and time to the minute.
 3. **Looks everything up** in the database, honouring wildcard patterns. The acquirer and operator IDs from the dump are joined into the 6-digit operator `id`.
-4. **Prompts for anything new.** For a new operator: its name, then its **mode**, chosen from a numbered menu of the 13 modes (a number or a name; there is no default). For a new station: its name, the reader ID pattern (with a suggested mask), the **line(s)** it is on (comma-separated for an interchange) and optional comments. A line name that does not exist yet is created after asking for its RGB hex colour (re-asked until valid; Enter for none). Pressing Enter on a name skips that item.
+4. **Prompts for anything new.** For a new operator: its name, then its **mode**, chosen from a numbered menu of the 13 modes (a number or a name; there is no default), then its **time zone** (`IST` or `UTC`, from a numbered menu; see [Operator Time Zone](#operator-time-zone)). For a new station: its name, the reader ID pattern (with a suggested mask), the **line(s)** it is on (comma-separated for an interchange) and optional comments. A line name that does not exist yet is created after asking for its RGB hex colour (re-asked until valid; Enter for none). Pressing Enter on a name skips that item.
 5. **Asks before saving.** Nothing is written until you confirm, and Ctrl-C leaves the database untouched.
 
-Only operator IDs, reader IDs, modes, line colours and the names you type are stored. Timestamps, amounts and balances are shown on screen but never written to the database. Use `--no-prompt` for a read-only report.
+Only operator IDs, reader IDs, modes, time zones, line colours and the names you type are stored. Timestamps, amounts and balances are shown on screen but never written to the database. Use `--no-prompt` for a read-only report.
 
 ### Add or change data by hand
 
 ```bash
 python scripts/ncmc_db.py operators
 python scripts/ncmc_db.py stations "Chennai Metro"
-python scripts/ncmc_db.py add-operator 0x0B177D "Chennai Metro" METRO
+python scripts/ncmc_db.py add-operator 0x0B177D "Chennai Metro" METRO IST   # time zone is optional, default IST
+python scripts/ncmc_db.py add-operator 0x010001 "MTC Chennai" BUS UTC
 python scripts/ncmc_db.py edit-operator chennai --mode METRO
+python scripts/ncmc_db.py edit-operator "MTC Chennai" --timezone UTC
 python scripts/ncmc_db.py add-station 0x0B177D 0x001??? "Airport"
 python scripts/ncmc_db.py add-station 0x0B177D - "Mannadi" -c "?"        # ID not decoded yet
 python scripts/ncmc_db.py edit-station 12 --name "Alandur" --comments "? Name shortened"
@@ -183,7 +216,7 @@ python scripts/export_csv.py --out DIR   # or elsewhere
 python scripts/ncmc_db.py import-csv DIR   # DIR contains operators.csv, stations.csv and (optionally) lines.csv
 ```
 
-Bare hex (`0B177D`), a lowercase `0x`, and the older `X` wildcard are accepted on import and normalised. `lines.csv` is optional, and a `stations.csv` without a `line_ids` column still imports, so CSV sets from before lines existed keep working.
+Bare hex (`0B177D`), a lowercase `0x`, and the older `X` wildcard are accepted on import and normalised. `lines.csv` is optional, and a `stations.csv` without a `line_ids` column still imports, so CSV sets from before lines existed keep working. An `operators.csv` without a `timezone` column (or with an empty cell) imports with the default time zone, `IST`.
 
 ### Run the tests
 
@@ -205,7 +238,7 @@ You do not need to run the scripts or edit the database to help. If you have spo
 
 | Template | Use it to | You will be asked for |
 |---|---|---|
-| **Add new operator** | Propose an operator that is not in `operators.csv` | Short operator name, operator ID (`0x` + 6 hex digits), mode, how the ID was obtained |
+| **Add new operator** | Propose an operator that is not in `operators.csv` | Short operator name, operator ID (`0x` + 6 hex digits), mode, time zone (`IST` or `UTC`), how the ID was obtained |
 | **Add or update line** | Add a line, change a line's name or colour, or remove a closed line | Operator, line name, RGB hex colour, link to the official map, current name for updates |
 | **Add or update station** | Add a station or reader ID (including an additional ID for an existing station, such as an interchange with a separate ID per line), fix a name, reader ID or lines, or remove a closed station | Operator, station name, reader ID or mask, line(s), evidence, comments on anything uncertain |
 | **Other issue** | Report a script bug, a data or export problem, suggest an improvement, or ask a question | Type of issue, description, and steps to reproduce or affected IDs where relevant |
@@ -238,11 +271,12 @@ Contributions should include both the updated `data/ncmc.db` and the regenerated
 
 ### Adding an Operator
 
-Use `ncmc_lookup.py` (it asks for the name and mode), or `ncmc_db.py add-operator`, with:
+Use `ncmc_lookup.py` (it asks for the name, mode and time zone), or `ncmc_db.py add-operator`, with:
 
 - `id`: the acquirer ID (1 byte) followed by the operator ID (2 bytes), e.g. `0x0B177D`
 - `name`: see the naming conventions below
 - `mode`: one of `BUS, TRAIN, TRAM, METRO, FERRY, TICKET_MACHINE, POS, OTHER, TOLL_ROAD, MONORAIL, CABLECAR, PARKING, HSR`. Use `METRO` for metro rail and `BUS` for buses; use `OTHER` when nothing fits.
+- `timezone`: `IST` or `UTC`, the time zone the operator's readers write timestamps in. Most operators use `IST` (the default); some, such as MTC Chennai, use `UTC`. Choose `UTC` only if the time shown for a transaction is 5 hours 30 minutes earlier than the real time. See [Operator Time Zone](#operator-time-zone).
 
 The `id` is unique to each operator, and the database will refuse duplicates.
 
@@ -293,10 +327,10 @@ Three files are generated in `export/`.
 `operators.csv`:
 
 ```text
-id,name,mode
-0x0B177D,Chennai Metro,METRO
-0x043630,Hyderabad Metro,METRO
-0x010001,MTC Chennai,BUS
+id,name,mode,timezone
+0x0B177D,Chennai Metro,METRO,IST
+0x043630,Hyderabad Metro,METRO,IST
+0x010001,MTC Chennai,BUS,UTC
 ```
 
 `lines.csv`:
@@ -321,6 +355,7 @@ reader_id,stop_name,operator_id,line_ids
 | `operators.csv` | `id` | 6-hex-digit operator ID (acquirer + operator), written as `0x` plus 6 hex digits, e.g. `0x0B177D`. |
 | | `name` | Short operator name. |
 | | `mode` | One of the modes listed above. |
+| | `timezone` | `IST` or `UTC`: the time zone of the operator's transaction timestamps. An app converts a `UTC` time to IST by adding 5 hours 30 minutes, for every transaction of that operator. See [Operator Time Zone](#operator-time-zone). |
 | `stations.csv` | `reader_id` | 3-byte reader ID, written as `0x` plus 6 characters that are hex digits or `?` (any digit), e.g. `0x001140` or `0x126???`. |
 | | `stop_name` | Stop name using Title Case Capitalization. |
 | | `operator_id` | The operator's `id` from `operators.csv`. |
@@ -596,7 +631,7 @@ When correcting a wildcard mapping, explain why the previous pattern was incorre
 
 - Use consistent operator and station names.
 - Follow the prescribed data structure and export format.
-- Give every operator the correct mode.
+- Give every operator the correct mode and time zone (`IST` unless the times are verifiably UTC).
 - Add only stations and lines that are open to the public, interchanges included.
 - Do not add a new line's name or colour to an existing station until that section opens.
 - Give lines their official RGB hex colour, or leave it empty.

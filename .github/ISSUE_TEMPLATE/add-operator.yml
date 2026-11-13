@@ -49,7 +49,7 @@ body:
   - type: dropdown
     id: timezone
     attributes:
-      label: timezone
+      label: Timezone
       description: Provide the timezone used by the operator (UTC or IST). Select UTC if time shown on the app is 5hrs 30mins earlier than actual time of transaction.
       options:
         - IST (default)

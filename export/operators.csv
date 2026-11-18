@@ -3,4 +3,4 @@ id,name,mode,timezone
 0x043630,Hyderabad Metro,METRO,IST
 0x010001,MTC Chennai,BUS,UTC
 0x020001,Bengaluru Metro,METRO,IST
-0x050000,BMTC Bengaluru,BUS,IST
+0x050000,BMTC Bengaluru,BUS,UTC
